@@ -209,7 +209,7 @@
             background: white;
             border: 1px solid #e0e0e0;
             border-radius: 12px;
-            padding: 14px 18px;
+            padding: 12px 15px 10px;
             margin-bottom: 12px;
             cursor: pointer;
             position: relative;
@@ -217,6 +217,10 @@
             transition: all 0.3s ease;
             transform: translateY(0);
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         .info-item::before {
             content: '';
@@ -244,21 +248,39 @@
         .item-title {
             font-weight: bold;
             color: #333;
-            margin-bottom: 6px;
+            margin-bottom: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             font-size: 15px;
+            width: 100%;
+            display: block;
+            text-align: center;
+        }
+        .item-date {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+            text-align: center;
+            display: block;
         }
         .item-category {
             font-size: 11px;
             color: #666;
-            position: absolute;
-            top: 10px;
-            right: 15px;
             background: rgba(240, 240, 240, 0.8);
             padding: 2px 6px;
             border-radius: 4px;
+            margin-left: auto;
+            margin-bottom: 1px;
+            display: inline-block;
+            margin-top: -5px;
+        }
+        .info-item-header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-start;
+            margin-bottom: -3px;
+            width: 100%;
         }
         #assistant-footer {
             padding: 15px;
@@ -570,6 +592,14 @@
                 <input type="text" id="edit-title" required>
             </div>
             <div class="form-group">
+                <label for="edit-start-date">开始日期</label>
+                <input type="date" id="edit-start-date">
+            </div>
+            <div class="form-group">
+                <label for="edit-end-date">结束日期</label>
+                <input type="date" id="edit-end-date">
+            </div>
+            <div class="form-group">
                 <label for="edit-content">内容</label>
                 <textarea id="edit-content" required></textarea>
             </div>
@@ -685,8 +715,15 @@
             itemEl.dataset.id = item.id;
             itemEl.draggable = true;
             itemEl.innerHTML = `
-                <div class="item-category">${item.category}</div>
+                <div class="info-item-header">
+                    <div class="item-category">${item.category}</div>
+                </div>
                 <div class="item-title">${item.title}</div>
+                ${(item.startDate || item.endDate) ? `
+                    <div class="item-date">
+                        ${item.startDate && item.endDate ? `${item.startDate} - ${item.endDate}` : (item.startDate || item.endDate)}
+                    </div>
+                ` : ''}
             `;
 
             container.appendChild(itemEl);
@@ -835,6 +872,8 @@
 
         // 重置表单
         document.getElementById('edit-title').value = '';
+        document.getElementById('edit-start-date').value = '';
+        document.getElementById('edit-end-date').value = '';
         document.getElementById('edit-content').value = '';
 
         // 如果是编辑模式，填充现有数据
@@ -842,6 +881,8 @@
             const item = appData.items.find(i => i.id === itemId);
             if (item) {
                 document.getElementById('edit-title').value = item.title;
+                document.getElementById('edit-start-date').value = item.startDate || '';
+                document.getElementById('edit-end-date').value = item.endDate || '';
                 document.getElementById('edit-content').value = item.content;
                 document.getElementById('edit-category').value = item.category;
                 modal.dataset.itemId = itemId;
@@ -872,6 +913,8 @@
         const modal = document.getElementById('edit-modal');
         const itemId = modal.dataset.itemId;
         const title = document.getElementById('edit-title').value.trim();
+        const startDate = document.getElementById('edit-start-date').value;
+        const endDate = document.getElementById('edit-end-date').value;
         const content = document.getElementById('edit-content').value.trim();
         const category = document.getElementById('edit-category').value;
 
@@ -887,6 +930,8 @@
                 appData.items[index] = {
                     ...appData.items[index],
                     title,
+                    startDate,
+                    endDate,
                     content,
                     category
                 };
@@ -897,6 +942,8 @@
             appData.items.push({
                 id: generateId(),
                 title,
+                startDate,
+                endDate,
                 content,
                 category,
                 order: maxOrder + 1
