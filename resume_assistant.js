@@ -583,6 +583,23 @@
             </div>
         `;
 
+        // 创建分类弹窗
+        const categoryModal = document.createElement('div');
+        categoryModal.id = 'category-modal';
+        categoryModal.innerHTML = `
+            <div class="modal-title">添加分类</div>
+            <div class="form-group">
+                <label for="category-name">分类名称</label>
+                <input type="text" id="category-name" placeholder="请输入分类名称" required>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancel-category">取消</button>
+                <button class="btn btn-primary" id="save-category">确定</button>
+            </div>
+        `;
+        // 复制编辑弹窗的样式
+        categoryModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
+
         // 创建遮罩层
         const overlay = document.createElement('div');
         overlay.id = 'overlay';
@@ -592,6 +609,7 @@
         document.body.appendChild(contextMenu);
         document.body.appendChild(tooltip);
         document.body.appendChild(editModal);
+        document.body.appendChild(categoryModal);
         document.body.appendChild(overlay);
 
         return {
@@ -604,6 +622,7 @@
             contextMenu,
             tooltip,
             editModal,
+            categoryModal,
             overlay
         };
     }
@@ -899,19 +918,47 @@
         }
     }
 
-    // 添加分类
-    function addCategory() {
-        const categoryName = prompt('请输入分类名称：');
-        if (categoryName && categoryName.trim()) {
-            const trimmedName = categoryName.trim();
-            if (!appData.categories.includes(trimmedName)) {
-                appData.categories.push(trimmedName);
+    // 显示分类弹窗
+    function showCategoryModal() {
+        const modal = document.getElementById('category-modal');
+        const overlay = document.getElementById('overlay');
+        const categoryInput = document.getElementById('category-name');
+        
+        // 重置输入框
+        categoryInput.value = '';
+        
+        // 显示弹窗
+        modal.style.display = 'block';
+        overlay.style.display = 'block';
+        
+        // 自动聚焦到输入框
+        categoryInput.focus();
+    }
+    
+    // 隐藏分类弹窗
+    function hideCategoryModal() {
+        document.getElementById('category-modal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+    
+    // 保存新分类
+    function saveCategory() {
+        const categoryName = document.getElementById('category-name').value.trim();
+        if (categoryName) {
+            if (!appData.categories.includes(categoryName)) {
+                appData.categories.push(categoryName);
                 saveData();
                 updateUI();
+                hideCategoryModal();
             } else {
                 alert('分类已存在！');
             }
         }
+    }
+    
+    // 添加分类
+    function addCategory() {
+        showCategoryModal();
     }
 
     // 删除分类
@@ -988,6 +1035,26 @@
             updateUI();
 
             // 添加事件监听
+            
+            // 分类弹窗事件
+            document.getElementById('save-category').addEventListener('click', saveCategory);
+            document.getElementById('cancel-category').addEventListener('click', hideCategoryModal);
+            
+            // 点击遮罩层关闭弹窗
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    hideEditModal();
+                    hideCategoryModal();
+                }
+            });
+            
+            // ESC键关闭弹窗
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    hideEditModal();
+                    hideCategoryModal();
+                }
+            });
 
             // 侧边栏控制
             const toggleBtn = document.getElementById('toggle-btn');
@@ -1028,10 +1095,12 @@
                 const assistant = document.getElementById('personal-info-assistant');
                 
                 // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
+                // 同时排除编辑弹窗、分类弹窗、右键菜单和遮罩层
                 if (!assistant.contains(e.target) && 
                     isExpanded && 
                     !appData.isFixed &&
                     !e.target.closest('#edit-modal') &&
+                    !e.target.closest('#category-modal') &&
                     !e.target.closest('#context-menu') &&
                     !e.target.closest('#overlay')) {
                     collapseSidebar();
