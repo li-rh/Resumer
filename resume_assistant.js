@@ -1339,7 +1339,7 @@
         }
         
         // 处理信息项点击事件
-        function handleItemClick() {
+        function handleItemClick(event) {
             // 检查右键菜单是否可见，如果可见则不执行填充功能
             const contextMenu = document.getElementById('context-menu');
             if (contextMenu && contextMenu.style.display === 'block') {
@@ -1349,11 +1349,21 @@
             const itemId = this.dataset.id;
             const item = appData.items.find(i => i.id === itemId);
             
-            if (item && item.content) {
-                console.log('[AutoFill Debug] 点击信息项，内容将在3秒内可自动填充');
+            if (item) {
+                // 检查是否按下Shift键
+                const isShiftPressed = event.shiftKey;
                 
-                // 存储点击的项目内容
-                lastClickedItemContent = item.content;
+                if (isShiftPressed && item.title) {
+                    console.log('[AutoFill Debug] 按下Shift键点击信息项，标题将在3秒内可自动填充');
+                    
+                    // 存储点击的项目标题
+                    lastClickedItemContent = item.title;
+                } else if (!isShiftPressed && item.content) {
+                    console.log('[AutoFill Debug] 点击信息项，内容将在3秒内可自动填充');
+                    
+                    // 存储点击的项目内容
+                    lastClickedItemContent = item.content;
+                }
                 
                 // 清除之前的定时器
                 if (autoFillTimeout) {
@@ -1385,7 +1395,7 @@
                 
                 newItem.addEventListener('mouseenter', handleItemMouseEnter);
                 newItem.addEventListener('mouseleave', handleItemMouseLeave);
-                newItem.addEventListener('click', handleItemClick); // 添加点击事件监听
+                newItem.addEventListener('click', (event) => handleItemClick.call(newItem, event)); // 添加点击事件监听，传递事件对象
                 addedListeners++;
             });
             
