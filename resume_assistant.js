@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -578,6 +578,16 @@
             <div class="context-menu-item" id="delete-item">删除</div>
         `;
 
+        // 创建分类右键菜单
+        const categoryContextMenu = document.createElement('div');
+        categoryContextMenu.id = 'category-context-menu';
+        categoryContextMenu.innerHTML = `
+            <div class="context-menu-item" id="rename-category">重命名</div>
+            <div class="context-menu-item" id="delete-category-menu">删除</div>
+        `;
+        // 复制条目右键菜单的样式
+        categoryContextMenu.style.cssText = 'position: fixed; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 8px 0; display: none; z-index: 10000; min-width: 120px;';
+
         // 创建提示框
         const tooltip = document.createElement('div');
         tooltip.id = 'tooltip';
@@ -637,6 +647,7 @@
         // 添加到页面
         document.body.appendChild(assistant);
         document.body.appendChild(contextMenu);
+        document.body.appendChild(categoryContextMenu);
         document.body.appendChild(tooltip);
         document.body.appendChild(editModal);
         document.body.appendChild(categoryModal);
@@ -660,31 +671,25 @@
     // 渲染分类
     function renderCategories(container, activeCategory = '全部') {
         container.innerHTML = '';
-
         // 添加全部标签
         const allBtn = document.createElement('button');
         allBtn.className = `category-btn ${activeCategory === '全部' ? 'active' : ''}`;
         allBtn.textContent = '全部';
         allBtn.dataset.category = '全部';
         container.appendChild(allBtn);
-
         // 添加分类标签
         appData.categories.forEach(category => {
             const btn = document.createElement('button');
             btn.className = `category-btn ${activeCategory === category ? 'active' : ''}`;
             btn.textContent = category;
             btn.dataset.category = category;
-
-            // 添加删除按钮
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-category';
-            deleteBtn.textContent = '×';
-            deleteBtn.dataset.category = category;
-            btn.appendChild(deleteBtn);
-
+            // 为分类按钮绑定右键菜单事件
+            btn.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                showCategoryContextMenu(e, category);
+            });
             container.appendChild(btn);
         });
-
         // 添加分类按钮
         const addBtn = document.createElement('button');
         addBtn.id = 'add-category';
@@ -746,6 +751,20 @@
         document.getElementById('context-menu').style.display = 'none';
     }
 
+    // 显示分类右键菜单
+    function showCategoryContextMenu(event, categoryName) {
+        const categoryContextMenu = document.getElementById('category-context-menu');
+        categoryContextMenu.style.left = `${event.clientX}px`;
+        categoryContextMenu.style.top = `${event.clientY}px`;
+        categoryContextMenu.style.display = 'block';
+        // 存储当前操作的分类名称
+        categoryContextMenu.dataset.categoryName = categoryName;
+    }
+
+    // 隐藏分类右键菜单
+    function hideCategoryContextMenu() {
+        document.getElementById('category-context-menu').style.display = 'none';
+    }
     // 显示提示框，与条目宽度相同且对齐
         function showTooltip(content, itemElement) {
             // 获取tooltip元素，如果不存在则创建
@@ -1007,23 +1026,194 @@
 
     // 删除分类
     function deleteCategory(categoryName) {
-        if (confirm(`确定要删除分类"${categoryName}"吗？该分类下的所有信息将被移动到默认分类。`)) {
-            // 将该分类下的信息移到第一个分类
-            const firstCategory = appData.categories[0] || '全部';
+        // 创建或获取删除确认弹窗
+        let deleteModal = document.getElementById('delete-category-modal');
+        if (!deleteModal) {
+            deleteModal = document.createElement('div');
+            deleteModal.id = 'delete-category-modal';
+            deleteModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
+            deleteModal.innerHTML = `
+                <div class="modal-title">删除分类</div>
+                <div style="margin: 20px 0; font-size: 14px; color: #333;">
+                    确定要删除分类“<strong>${categoryName}</strong>”吗？
+                </div>
+                <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-direction: column;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="radio" name="delete-option" value="move" checked style="margin-right: 8px;">
+                        <span>将该分类下的所有信息移动到“<strong>全部</strong>”</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="radio" name="delete-option" value="delete" style="margin-right: 8px;">
+                        <span>直接删除该分类下的所有信息</span>
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-delete-category">取消</button>
+                    <button class="btn btn-primary" id="confirm-delete-category">确定</button>
+                </div>
+            `;
+            document.body.appendChild(deleteModal);
+        } else {
+            // 如果弹窗已存在，更新其内容
+            deleteModal.querySelector('.modal-title').textContent = '删除分类';
+            const messageDiv = deleteModal.querySelector('div[style*="margin: 20px"]');
+            if (messageDiv) {
+                messageDiv.innerHTML = `
+                    确定要删除分类“<strong>${categoryName}</strong>”吗？
+                `;
+            }
+        }
+
+        // 显示弹窗和遮罩
+        const overlay = document.getElementById('overlay');
+        deleteModal.style.display = 'block';
+        overlay.style.display = 'block';
+
+        // 为“确定”按钮添加一次性事件监听器
+        const confirmBtn = document.getElementById('confirm-delete-category');
+        const cancelBtn = document.getElementById('cancel-delete-category');
+
+        // 使用 { once: true } 确保监听器只执行一次，避免重复绑定
+        confirmBtn.addEventListener('click', function handler() {
+            const selectedOption = deleteModal.querySelector('input[name="delete-option"]:checked').value;
+
+            if (selectedOption === 'move') {
+                // 将该分类下的信息移到“全部”
+                appData.items = appData.items.map(item => {
+                    if (item.category === categoryName) {
+                        return { ...item, category: '全部' };
+                    }
+                    return item;
+                });
+            } else if (selectedOption === 'delete') {
+                // 直接删除该分类下的所有信息
+                appData.items = appData.items.filter(item => item.category !== categoryName);
+            }
+
+            // 删除分类本身
+            appData.categories = appData.categories.filter(cat => cat !== categoryName);
+            saveData();
+            updateUI();
+            // 隐藏弹窗
+            deleteModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        // 为“取消”按钮添加一次性事件监听器
+        cancelBtn.addEventListener('click', function handler() {
+            deleteModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        // 点击遮罩层关闭
+        overlay.addEventListener('click', function handler(e) {
+            if (e.target === overlay) {
+                deleteModal.style.display = 'none';
+                overlay.style.display = 'none';
+            }
+        }, { once: true });
+    }
+    // 编辑/重命名分类
+    function editCategory(oldCategoryName) {
+        // 创建或获取重命名弹窗
+        let renameModal = document.getElementById('rename-category-modal');
+        if (!renameModal) {
+            renameModal = document.createElement('div');
+            renameModal.id = 'rename-category-modal';
+            renameModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
+            renameModal.innerHTML = `
+                <div class="modal-title">重命名分类</div>
+                <div style="margin: 20px 0; font-size: 14px; color: #333;">
+                    请为分类“<strong>${oldCategoryName}</strong>”输入新名称：
+                </div>
+                <div class="form-group">
+                    <label for="new-category-name">新分类名称</label>
+                    <input type="text" id="new-category-name" value="${oldCategoryName}" required>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-rename-category">取消</button>
+                    <button class="btn btn-primary" id="confirm-rename-category">确定</button>
+                </div>
+            `;
+            document.body.appendChild(renameModal);
+        } else {
+            // 如果弹窗已存在，更新其内容
+            const messageDiv = renameModal.querySelector('div[style*="margin: 20px"]');
+            if (messageDiv) {
+                messageDiv.innerHTML = `
+                    请为分类“<strong>${oldCategoryName}</strong>”输入新名称：
+                `;
+            }
+            document.getElementById('new-category-name').value = oldCategoryName;
+        }
+
+        // 显示弹窗和遮罩
+        const overlay = document.getElementById('overlay');
+        renameModal.style.display = 'block';
+        overlay.style.display = 'block';
+
+        // 为“确定”按钮添加一次性事件监听器
+        const confirmBtn = document.getElementById('confirm-rename-category');
+        const cancelBtn = document.getElementById('cancel-rename-category');
+
+        confirmBtn.addEventListener('click', function handler() {
+            const newCategoryName = document.getElementById('new-category-name').value.trim();
+
+            if (!newCategoryName) {
+                alert('分类名称不能为空');
+                return;
+            }
+
+            if (newCategoryName === oldCategoryName) {
+                // 名称未改变，直接关闭
+                renameModal.style.display = 'none';
+                overlay.style.display = 'none';
+                return;
+            }
+
+            if (appData.categories.includes(newCategoryName)) {
+                alert('该分类名称已存在');
+                return;
+            }
+
+            // 更新分类数组
+            const index = appData.categories.indexOf(oldCategoryName);
+            if (index !== -1) {
+                appData.categories[index] = newCategoryName;
+            }
+
+            // 同步更新所有相关条目的分类
             appData.items = appData.items.map(item => {
-                if (item.category === categoryName) {
-                    return { ...item, category: firstCategory };
+                if (item.category === oldCategoryName) {
+                    return { ...item, category: newCategoryName };
                 }
                 return item;
             });
 
-            // 删除分类
-            appData.categories = appData.categories.filter(cat => cat !== categoryName);
             saveData();
             updateUI();
-        }
-    }
+            // 隐藏弹窗
+            renameModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
 
+        // 为“取消”按钮添加一次性事件监听器
+        cancelBtn.addEventListener('click', function handler() {
+            renameModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        // 点击遮罩层关闭
+        overlay.addEventListener('click', function handler(e) {
+            if (e.target === overlay) {
+                renameModal.style.display = 'none';
+                overlay.style.display = 'none';
+            }
+        }, { once: true });
+
+        // 自动聚焦到输入框
+        document.getElementById('new-category-name').focus();
+    }
     // 更新拖拽排序
     function updateItemOrder(draggedId, targetId) {
         const draggedIndex = appData.items.findIndex(item => item.id === draggedId);
@@ -1137,14 +1327,14 @@
             // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
             document.addEventListener('click', (e) => {
                 const assistant = document.getElementById('personal-info-assistant');
-                
                 // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
-                // 同时排除编辑弹窗、分类弹窗、右键菜单和遮罩层
+                // 同时排除编辑弹窗、分类弹窗、删除分类弹窗、右键菜单和遮罩层
                 if (!assistant.contains(e.target) && 
                     isExpanded && 
                     !appData.isFixed &&
                     !e.target.closest('#edit-modal') &&
                     !e.target.closest('#category-modal') &&
+                    !e.target.closest('#delete-category-modal') && // 新增：排除删除分类弹窗
                     !e.target.closest('#context-menu') &&
                     !e.target.closest('#overlay')) {
                     collapseSidebar();
@@ -1207,9 +1397,6 @@
                 renderItems(document.getElementById('items-container'), category, document.getElementById('search-input').value);
             } else if (e.target.id === 'add-category') {
                 addCategory();
-            } else if (e.target.classList.contains('delete-category')) {
-                const category = e.target.dataset.category;
-                deleteCategory(category);
             }
         });
 
@@ -1260,6 +1447,34 @@
             hideContextMenu();
             deleteItem(itemId);
         });
+
+                // 分类右键菜单项点击
+        document.getElementById('rename-category').addEventListener('click', () => {
+            const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
+            hideCategoryContextMenu();
+            if (categoryName && categoryName !== '全部') {
+                editCategory(categoryName);
+            }
+        });
+
+        document.getElementById('delete-category-menu').addEventListener('click', () => {
+            const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
+            hideCategoryContextMenu();
+            if (categoryName && categoryName !== '全部') {
+                deleteCategory(categoryName);
+            }
+        });
+
+        // 确保分类右键菜单在点击其他区域时关闭
+        document.addEventListener('click', (e) => {
+            const categoryContextMenu = document.getElementById('category-context-menu');
+            if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
+                hideCategoryContextMenu();
+            }
+        });
+
+        // 点击遮罩层关闭分类右键菜单
+        document.getElementById('overlay').addEventListener('click', hideCategoryContextMenu);
 
         // 编辑弹窗操作
         document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
