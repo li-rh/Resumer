@@ -1253,7 +1253,7 @@
         // 确保右键菜单在点击其他区域时关闭
         document.addEventListener('click', (e) => {
             const contextMenu = document.getElementById('context-menu');
-            if (!contextMenu.contains(e.target) && !e.target.closest('.info-item')) {
+            if (contextMenu && !contextMenu.contains(e.target)) {
                 hideContextMenu();
             }
         });
@@ -1340,6 +1340,12 @@
         
         // 处理信息项点击事件
         function handleItemClick() {
+            // 检查右键菜单是否可见，如果可见则不执行填充功能
+            const contextMenu = document.getElementById('context-menu');
+            if (contextMenu && contextMenu.style.display === 'block') {
+                return;
+            }
+            
             const itemId = this.dataset.id;
             const item = appData.items.find(i => i.id === itemId);
             
