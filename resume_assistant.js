@@ -53,8 +53,10 @@
         #personal-info-assistant.collapsed #assistant-footer {
             display: none;
         }
+        /* 固定状态 - 保持固定定位不随页面滚动 */
         #personal-info-assistant.fixed {
-            position: absolute;
+            position: fixed;
+            z-index: 10000;
         }
         #assistant-header {
             padding: 15px;
