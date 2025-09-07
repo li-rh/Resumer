@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.2
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -813,14 +813,12 @@
         // 创建tooltip元素
         function createTooltipElement() {
             try {
-                console.log('[Tooltip Debug] 尝试创建tooltip元素');
                 const existingTooltip = document.getElementById('tooltip');
                 if (!existingTooltip) {
                     const tooltip = document.createElement('div');
                     tooltip.id = 'tooltip';
                     tooltip.style.cssText = 'display:block; visibility:visible; opacity:1; z-index:9999; position:fixed; background-color:rgba(0,0,0,0.8); color:white; padding:10px 15px; border-radius:4px; max-width:450px; font-size:14px; pointer-events:none;';
                     document.body.appendChild(tooltip);
-                    console.log('[Tooltip Debug] 已成功创建tooltip元素');
                 }
             } catch (error) {
                 console.error('[Tooltip Debug] 创建tooltip元素失败:', error);
@@ -829,7 +827,6 @@
 
     // 隐藏提示框（带日志调试）
         function hideTooltip() {
-            console.log('[Tooltip Debug] hideTooltip 被调用');
             try {
                 const tooltip = document.getElementById('tooltip');
                 if (tooltip) {
@@ -1283,10 +1280,7 @@
             tooltip = document.getElementById('tooltip');
         }
         
-        console.log('[Tooltip Debug] 初始化tooltip变量:', {
-            tooltipExists: !!tooltip,
-            itemsContainerExists: !!itemsContainer
-        });
+
         
         // 监听整个文档的鼠标移动，更新当前鼠标位置
         document.addEventListener('mousemove', function(e) {
@@ -1299,11 +1293,9 @@
         // 处理鼠标进入事件（带延迟显示）
         function handleItemMouseEnter(event) {
             const itemId = this.dataset.id;
-            console.log('[Tooltip Debug] 鼠标进入info-item，ID:', itemId);
             
             const item = appData.items.find(i => i.id === itemId);
             if (item) {
-                console.log('[Tooltip Debug] 找到对应的数据项:', {title: item.title, hasContent: !!item.content});
                 
                 if (item.content) {
                     // 清除之前可能存在的定时器
@@ -1326,13 +1318,10 @@
         
         // 处理鼠标离开事件（清除延迟定时器）
         function handleItemMouseLeave() {
-            console.log('[Tooltip Debug] 鼠标离开info-item');
-            
             // 清除延迟显示的定时器
             if (tooltipTimeout) {
                 clearTimeout(tooltipTimeout);
                 tooltipTimeout = null;
-                console.log('[Tooltip Debug] 已清除tooltip延迟显示定时器');
             }
             
             hideTooltip();
@@ -1380,11 +1369,8 @@
         
         // 设置tooltip事件委托（带日志调试）
         function setupTooltipEvents() {
-            console.log('[Tooltip Debug] setupTooltipEvents 被调用');
-            
             // 移除旧的事件监听器
             const infoItems = itemsContainer.querySelectorAll('.info-item');
-            console.log('[Tooltip Debug] 找到', infoItems.length, '个info-item元素');
             
             // 为每个item添加事件监听器
             let addedListeners = 0;
@@ -1399,7 +1385,6 @@
                 addedListeners++;
             });
             
-            console.log('[Tooltip Debug] 已为', addedListeners, '个info-item添加事件监听器');
         }
         
         // 在渲染完项目后设置事件监听器
@@ -1459,32 +1444,138 @@
             }
         });
 
-        // 添加全局输入框点击监听，用于自动填充内容
-        document.addEventListener('click', (e) => {
-            // 检查点击的元素是否为输入框并且有最近点击的项目内容
-            if ((e.target.tagName === 'INPUT' && 
-                 (e.target.type === 'text' || e.target.type === 'email' || e.target.type === 'password' || e.target.type === 'search')) || 
-                e.target.tagName === 'TEXTAREA') {
+        // 模拟真实用户输入的函数
+        function simulateUserInput(element, text) {
+            // 先清空输入框
+            element.value = '';
+            
+            // 触发初始input事件
+            const clearEvent = new Event('input', { bubbles: true });
+            element.dispatchEvent(clearEvent);
+            
+            // 创建一个异步函数逐字符输入
+            (async () => {
+                // 将输入内容拆分为字符数组
+                const chars = text.split('');
                 
-                if (lastClickedItemContent) {
-                    console.log('[AutoFill Debug] 检测到输入框被选中，执行自动填充');
-                    
-                    // 设置输入框内容
-                    e.target.value = lastClickedItemContent;
+                // 逐字符输入，模拟真实打字速度
+                for (let i = 0; i < chars.length; i++) {
+                    // 在实际元素上设置字符
+                    element.value += chars[i];
                     
                     // 触发input事件，确保相关框架能检测到变化
                     const inputEvent = new Event('input', { bubbles: true });
-                    e.target.dispatchEvent(inputEvent);
+                    element.dispatchEvent(inputEvent);
                     
-                    // 清除缓存的内容，避免重复填充
-                    lastClickedItemContent = null;
-                    if (autoFillTimeout) {
-                        clearTimeout(autoFillTimeout);
-                        autoFillTimeout = null;
-                    }
+                    // 随机延迟，模拟真实打字速度的变化
+                    await new Promise(resolve => setTimeout(resolve, Math.random() * 50 + 20));
+                }
+                
+                // 所有字符输入完成后触发change事件
+                const changeEvent = new Event('change', { bubbles: true });
+                element.dispatchEvent(changeEvent);
+            })();
+        }
+        
+        // 添加全局输入框点击监听，用于自动填充内容
+        document.addEventListener('click', (e) => {
+            // 检查点击的元素是否为可输入元素并且有最近点击的项目内容
+            let targetElement = null;
+            console.log('[AutoFill Debug] 点击事件触发');
+            // 1. 检查直接点击的元素是否为可输入元素
+            // 只检测直接点击的可输入元素
+            if (isInputElement(e.target)) {
+                targetElement = e.target;
+                console.log('[AutoFill Debug] targetElemnet:', targetElement);
+            }
+            
+            // 执行自动填充
+            if (targetElement && lastClickedItemContent) {
+                console.log('[AutoFill Debug] 检测到可输入元素被选中，执行自动填充');
+                
+                // 聚焦到目标元素
+                try {
+                    targetElement.focus();
+                } catch (err) {
+                    console.log('[AutoFill Debug] 无法聚焦到元素:', err);
+                }
+                
+                // 使用模拟用户输入的方式填充内容
+                simulateUserInput(targetElement, lastClickedItemContent);
+                
+                // 清除缓存的内容，避免重复填充
+                lastClickedItemContent = null;
+                if (autoFillTimeout) {
+                    clearTimeout(autoFillTimeout);
+                    autoFillTimeout = null;
                 }
             }
         });
+        
+        // 判断元素是否为可输入元素的通用函数
+        function isInputElement(element) {
+            // 检查常见的表单输入元素
+            if ((element.tagName === 'INPUT' && 
+                 (element.type === 'text' || element.type === 'email' || 
+                  element.type === 'password' || element.type === 'search' ||
+                  element.type === 'tel' || element.type === 'url' || 
+                  element.type === 'number' || element.type === 'date' ||
+                  element.type === 'datetime-local')) || 
+                element.tagName === 'TEXTAREA' || 
+                element.tagName === 'SELECT' ||
+                // 检查是否为contenteditable元素
+                element.hasAttribute('contenteditable')) {
+                // 确保元素是可见且可编辑的
+                return isElementVisible(element) && 
+                       !element.disabled && 
+                       !element.readOnly;
+            }
+            return false;
+        }
+        
+        // 查找最近的可输入元素（包括父容器内的输入元素）
+        function findClosestInputElement(element) {
+            // 检查元素本身
+            if (isInputElement(element)) {
+                return element;
+            }
+            
+            // 检查直接子元素
+            const childInputs = element.querySelectorAll('input, textarea, select, [contenteditable="true"]');
+            for (let i = 0; i < childInputs.length; i++) {
+                if (isInputElement(childInputs[i])) {
+                    return childInputs[i];
+                }
+            }
+            
+            // 检查父元素链上是否有包含可输入元素的容器
+            let current = element.parentElement;
+            const maxDepth = 5; // 限制向上查找的深度，避免性能问题
+            let depth = 0;
+            
+            while (current && depth < maxDepth) {
+                const parentInputs = current.querySelectorAll('input, textarea, select, [contenteditable="true"]');
+                for (let i = 0; i < parentInputs.length; i++) {
+                    if (isInputElement(parentInputs[i])) {
+                        return parentInputs[i];
+                    }
+                }
+                current = current.parentElement;
+                depth++;
+            }
+            
+            return null;
+        }
+        
+        // 检查元素是否可见
+        function isElementVisible(element) {
+            const style = window.getComputedStyle(element);
+            return (style.display !== 'none' && 
+                    style.visibility !== 'hidden' && 
+                    style.opacity !== '0' && 
+                    element.offsetWidth > 0 && 
+                    element.offsetHeight > 0);
+        }
         
         // 快捷键
         document.addEventListener('keydown', (e) => {
