@@ -1087,6 +1087,7 @@
         
         // 分类切换
         document.getElementById('category-container').addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止事件冒泡，防止点击分类区域被误判为外部点击
             if (e.target.classList.contains('category-btn')) {
                 const category = e.target.dataset.category;
                 renderCategories(document.getElementById('category-container'), category);
@@ -1094,7 +1095,6 @@
             } else if (e.target.id === 'add-category') {
                 addCategory();
             } else if (e.target.classList.contains('delete-category')) {
-                e.stopPropagation();
                 const category = e.target.dataset.category;
                 deleteCategory(category);
             }
