@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.5
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -1659,37 +1659,91 @@
             }
         });
 
-        // 模拟真实用户输入的函数
+        // 使用更接近真实用户操作的方式填充内容
         function simulateUserInput(element, text) {
-            // 先清空输入框
-            element.value = '';
-            
-            // 触发初始input事件
-            const clearEvent = new Event('input', { bubbles: true });
-            element.dispatchEvent(clearEvent);
-            
-            // 创建一个异步函数逐字符输入
-            (async () => {
-                // 将输入内容拆分为字符数组
-                const chars = text.split('');
+            try {
+                // 聚焦到目标元素
+                element.focus();
                 
-                // 逐字符输入，模拟真实打字速度
-                for (let i = 0; i < chars.length; i++) {
-                    // 在实际元素上设置字符
-                    element.value += chars[i];
-                    
-                    // 触发input事件，确保相关框架能检测到变化
-                    const inputEvent = new Event('input', { bubbles: true });
-                    element.dispatchEvent(inputEvent);
-                    
-                    // 随机延迟，模拟真实打字速度的变化
-                    await new Promise(resolve => setTimeout(resolve, Math.random() * 50 + 20));
+                // 选中当前内容（如果有的话）
+                if (element.setSelectionRange) {
+                    element.setSelectionRange(0, element.value.length);
+                } else if (element.createTextRange) {
+                    const range = element.createTextRange();
+                    range.select();
                 }
                 
-                // 所有字符输入完成后触发change事件
-                const changeEvent = new Event('change', { bubbles: true });
-                element.dispatchEvent(changeEvent);
-            })();
+                // 尝试使用document.execCommand('insertText')方法，这更接近真实用户输入
+                try {
+                    // 插入新文本，这会替换选中的内容
+                    if (document.execCommand('insertText', false, text)) {
+                        console.log('[AutoFill Debug] 使用document.execCommand成功填充内容');
+                    } else {
+                        throw new Error('document.execCommand failed');
+                    }
+                } catch (execError) {
+                    console.warn('[AutoFill Debug] document.execCommand失败，尝试备用方法:', execError);
+                    
+                    // 备用方法1: 使用Clipboard API
+                    if (navigator.clipboard && window.isSecureContext) {
+                        console.log('[AutoFill Debug] 尝试使用Clipboard API');
+                        navigator.clipboard.writeText(text).then(() => {
+                            // 模拟Ctrl+V粘贴操作
+                            const pasteEvent = new KeyboardEvent('keydown', {
+                                bubbles: true,
+                                cancelable: true,
+                                key: 'v',
+                                ctrlKey: true
+                            });
+                            element.dispatchEvent(pasteEvent);
+                        }).catch(clipboardError => {
+                            console.error('[AutoFill Error] Clipboard API失败:', clipboardError);
+                            // 最终备用方案: 直接设置值
+                            element.value = text;
+                            triggerInputEvents(element);
+                        });
+                    } else {
+                        // 最终备用方案: 直接设置值
+                        element.value = text;
+                        triggerInputEvents(element);
+                    }
+                }
+            } catch (error) {
+                console.error('[AutoFill Error] 填充内容失败:', error);
+                // 最后的兜底方案
+                try {
+                    element.value = text;
+                    triggerInputEvents(element);
+                } catch (fallbackError) {
+                    console.error('[AutoFill Error] 兜底方案也失败:', fallbackError);
+                }
+            }
+        }
+        
+        // 触发输入事件的辅助函数
+        function triggerInputEvents(element) {
+            // 创建并触发input事件，使用compositionend标记为真实用户输入
+            const inputEvent = new Event('input', {
+                bubbles: true,
+                cancelable: true
+            });
+            inputEvent.isTrusted = true; // 虽然现代浏览器会忽略这个设置，但还是尝试设置
+            element.dispatchEvent(inputEvent);
+            
+            // 触发compositionstart和compositionend事件，模拟IME输入完成
+            const compStartEvent = new Event('compositionstart', { bubbles: true });
+            element.dispatchEvent(compStartEvent);
+            
+            const compEndEvent = new Event('compositionend', { bubbles: true });
+            compEndEvent.data = element.value; // 设置完成的文本
+            element.dispatchEvent(compEndEvent);
+            
+            // 触发change事件
+            const changeEvent = new Event('change', {
+                bubbles: true,
+                cancelable: true
+            });
+            element.dispatchEvent(changeEvent);
         }
         
         // 添加全局输入框点击监听，用于自动填充内容
