@@ -10,7 +10,7 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // 样式定义
@@ -499,9 +499,6 @@
         isFixed: true,
         sidebarPosition: 'right' // 默认在右侧
     };
-    
-    // 侧边栏展开状态变量
-    let isExpanded = true;
 
     // 从存储加载数据
     function loadData() {
@@ -535,12 +532,12 @@
         // 创建头部
         const header = document.createElement('div');
         header.id = 'assistant-header';
-        
+
         // 根据保存的位置设置初始按钮文本和标题
         const isLeftSide = appData.sidebarPosition === 'left';
         const toggleBtnText = isLeftSide ? '▶' : '◀';
         const toggleBtnTitle = isLeftSide ? '移到右侧' : '移到左侧';
-        
+
         header.innerHTML = `
             <div id="assistant-title">信息助手</div>
             <div id="assistant-controls">
@@ -694,7 +691,7 @@
             // 设置分类按钮可拖拽
             btn.draggable = true;
             // 为分类按钮绑定右键菜单事件
-            btn.addEventListener('contextmenu', function(e) {
+            btn.addEventListener('contextmenu', function (e) {
                 e.preventDefault();
                 showCategoryContextMenu(e, category);
             });
@@ -777,110 +774,110 @@
         document.getElementById('category-context-menu').style.display = 'none';
     }
     // 显示提示框，与条目宽度相同且对齐
-        function showTooltip(content, itemElement) {
-            // 获取tooltip元素，如果不存在则创建
-            let tooltip = document.getElementById('tooltip');
-            if (!tooltip) {
-                createTooltipElement();
-                tooltip = document.getElementById('tooltip');
-                if (!tooltip) return;
-            }
-            
-            // 移除show类以重置动画
-            tooltip.classList.remove('show');
-            
-            // 设置提示框内容，最多显示50个字符
-            const displayContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
-            tooltip.textContent = displayContent;
-            
-            // 强制设置显示样式
-            tooltip.style.visibility = 'hidden'; // 先设置为不可见以获取尺寸
-            tooltip.style.position = 'fixed';
-            tooltip.style.zIndex = '9999';
-            tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-            tooltip.style.color = 'white';
-            tooltip.style.padding = '10px 15px';
-            tooltip.style.borderRadius = '4px';
-            tooltip.style.fontSize = '14px';
-            tooltip.style.pointerEvents = 'none';
-            
-            // 计算位置 - 与条目宽度相同且水平对齐
-            if (itemElement) {
-                const itemRect = itemElement.getBoundingClientRect();
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                
-                // 设置tooltip宽度与条目相同
-                tooltip.style.width = `${itemRect.width}px`;
-                tooltip.style.maxWidth = `${itemRect.width}px`;
-                
-                // 计算垂直位置：条目下方10px
-                let top = itemRect.bottom + 10;
-                
-                // 视口边界检查 - 垂直方向
-                if (top + tooltip.offsetHeight > viewportHeight - 10) {
-                    // 如果下方空间不足，显示在条目上方
-                    top = itemRect.top - tooltip.offsetHeight - 10;
-                }
-                top = Math.max(10, Math.min(top, viewportHeight - tooltip.offsetHeight - 10));
-                
-                // 设置位置 - 水平与条目左边缘对齐
-                tooltip.style.left = `${itemRect.left}px`;
-                tooltip.style.top = `${top}px`;
-            }
-            
-            // 强制回流，确保动画生效
-            tooltip.offsetWidth;
-            
-            // 显示tooltip
-            tooltip.style.visibility = 'visible';
-            // 使用setTimeout确保样式应用后再添加show类以触发动画
-            setTimeout(() => {
-                tooltip.classList.add('show');
-            }, 10);
-        }
-        
-        // 创建tooltip元素
-        function createTooltipElement() {
-            try {
-                const existingTooltip = document.getElementById('tooltip');
-                if (!existingTooltip) {
-                    const tooltip = document.createElement('div');
-                    tooltip.id = 'tooltip';
-                    tooltip.style.cssText = 'display:block; visibility:visible; opacity:1; z-index:9999; position:fixed; background-color:rgba(0,0,0,0.8); color:white; padding:10px 15px; border-radius:4px; max-width:450px; font-size:14px; pointer-events:none;';
-                    document.body.appendChild(tooltip);
-                }
-            } catch (error) {
-                console.error('[Tooltip Debug] 创建tooltip元素失败:', error);
-            }
+    function showTooltip(content, itemElement) {
+        // 获取tooltip元素，如果不存在则创建
+        let tooltip = document.getElementById('tooltip');
+        if (!tooltip) {
+            createTooltipElement();
+            tooltip = document.getElementById('tooltip');
+            if (!tooltip) return;
         }
 
-    // 隐藏提示框（带日志调试）
-        function hideTooltip() {
-            try {
-                const tooltip = document.getElementById('tooltip');
-                if (tooltip) {
-                    // 移除show类，触发淡出动画
-                    tooltip.classList.remove('show');
-                    
-                    // 等待动画完成后再完全隐藏
-                    setTimeout(() => {
-                        if (tooltip && !tooltip.classList.contains('show')) {
-                            tooltip.style.visibility = 'hidden';
-                            console.log('[Tooltip Debug] 已移除show类并隐藏tooltip');
-                        }
-                    }, 300);
-                }
-                
-                // 同时移除临时tooltip
-                const tempTooltip = document.getElementById('temp-tooltip');
-                if (tempTooltip) {
-                    tempTooltip.remove();
-                }
-            } catch (error) {
-                console.error('[Tooltip Debug] hideTooltip函数执行出错:', error);
+        // 移除show类以重置动画
+        tooltip.classList.remove('show');
+
+        // 设置提示框内容，最多显示50个字符
+        const displayContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
+        tooltip.textContent = displayContent;
+
+        // 强制设置显示样式
+        tooltip.style.visibility = 'hidden'; // 先设置为不可见以获取尺寸
+        tooltip.style.position = 'fixed';
+        tooltip.style.zIndex = '9999';
+        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        tooltip.style.color = 'white';
+        tooltip.style.padding = '10px 15px';
+        tooltip.style.borderRadius = '4px';
+        tooltip.style.fontSize = '14px';
+        tooltip.style.pointerEvents = 'none';
+
+        // 计算位置 - 与条目宽度相同且水平对齐
+        if (itemElement) {
+            const itemRect = itemElement.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // 设置tooltip宽度与条目相同
+            tooltip.style.width = `${itemRect.width}px`;
+            tooltip.style.maxWidth = `${itemRect.width}px`;
+
+            // 计算垂直位置：条目下方10px
+            let top = itemRect.bottom + 10;
+
+            // 视口边界检查 - 垂直方向
+            if (top + tooltip.offsetHeight > viewportHeight - 10) {
+                // 如果下方空间不足，显示在条目上方
+                top = itemRect.top - tooltip.offsetHeight - 10;
             }
+            top = Math.max(10, Math.min(top, viewportHeight - tooltip.offsetHeight - 10));
+
+            // 设置位置 - 水平与条目左边缘对齐
+            tooltip.style.left = `${itemRect.left}px`;
+            tooltip.style.top = `${top}px`;
         }
+
+        // 强制回流，确保动画生效
+        tooltip.offsetWidth;
+
+        // 显示tooltip
+        tooltip.style.visibility = 'visible';
+        // 使用setTimeout确保样式应用后再添加show类以触发动画
+        setTimeout(() => {
+            tooltip.classList.add('show');
+        }, 10);
+    }
+
+    // 创建tooltip元素
+    function createTooltipElement() {
+        try {
+            const existingTooltip = document.getElementById('tooltip');
+            if (!existingTooltip) {
+                const tooltip = document.createElement('div');
+                tooltip.id = 'tooltip';
+                tooltip.style.cssText = 'display:block; visibility:visible; opacity:1; z-index:9999; position:fixed; background-color:rgba(0,0,0,0.8); color:white; padding:10px 15px; border-radius:4px; max-width:450px; font-size:14px; pointer-events:none;';
+                document.body.appendChild(tooltip);
+            }
+        } catch (error) {
+            console.error('[Tooltip Debug] 创建tooltip元素失败:', error);
+        }
+    }
+
+    // 隐藏提示框（带日志调试）
+    function hideTooltip() {
+        try {
+            const tooltip = document.getElementById('tooltip');
+            if (tooltip) {
+                // 移除show类，触发淡出动画
+                tooltip.classList.remove('show');
+
+                // 等待动画完成后再完全隐藏
+                setTimeout(() => {
+                    if (tooltip && !tooltip.classList.contains('show')) {
+                        tooltip.style.visibility = 'hidden';
+                        console.log('[Tooltip Debug] 已移除show类并隐藏tooltip');
+                    }
+                }, 300);
+            }
+
+            // 同时移除临时tooltip
+            const tempTooltip = document.getElementById('temp-tooltip');
+            if (tempTooltip) {
+                tempTooltip.remove();
+            }
+        } catch (error) {
+            console.error('[Tooltip Debug] hideTooltip函数执行出错:', error);
+        }
+    }
 
     // 显示编辑弹窗
     function showEditModal(itemId = null) {
@@ -919,7 +916,7 @@
             // 添加模式
             modal.dataset.itemId = '';
             document.querySelector('.modal-title').textContent = '添加信息';
-            
+
             // 获取当前活动的分类，并设置为默认分类（跳过'全部'分类）
             const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
             const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '';
@@ -1051,24 +1048,24 @@
         const modal = document.getElementById('category-modal');
         const overlay = document.getElementById('overlay');
         const categoryInput = document.getElementById('category-name');
-        
+
         // 重置输入框
         categoryInput.value = '';
-        
+
         // 显示弹窗
         modal.style.display = 'block';
         overlay.style.display = 'block';
-        
+
         // 自动聚焦到输入框
         categoryInput.focus();
     }
-    
+
     // 隐藏分类弹窗
     function hideCategoryModal() {
         document.getElementById('category-modal').style.display = 'none';
         document.getElementById('overlay').style.display = 'none';
     }
-    
+
     // 保存新分类
     function saveCategory() {
         const categoryName = document.getElementById('category-name').value.trim();
@@ -1083,7 +1080,7 @@
             }
         }
     }
-    
+
     // 添加分类
     function addCategory() {
         showCategoryModal();
@@ -1287,56 +1284,56 @@
         if (draggedItem && targetItem) {
             // 先将所有项目按当前order值排序
             appData.items.sort((a, b) => a.order - b.order);
-            
+
             // 找到拖拽项目和目标项目在排序后的数组中的索引
             const draggedIdx = appData.items.findIndex(item => item.id === draggedId);
             const targetIdx = appData.items.findIndex(item => item.id === targetId);
-            
+
             // 如果找到了两个项目
             if (draggedIdx !== -1 && targetIdx !== -1) {
                 // 移除拖拽项目
                 const removedItem = appData.items.splice(draggedIdx, 1)[0];
-                
+
                 // 在目标位置插入拖拽项目
                 appData.items.splice(targetIdx, 0, removedItem);
-                
+
                 // 重新分配order值，保持连续的顺序
                 appData.items.forEach((item, index) => {
                     item.order = index + 1; // 从1开始编号
                 });
-                
+
                 saveData();
                 updateUI();
             }
         }
     }
-    
+
     // 更新分类拖拽排序
     function updateCategoryOrder(draggedCategory, targetCategory) {
         // 跳过"全部"分类的排序
         if (draggedCategory === '全部' || targetCategory === '全部') {
             return;
         }
-        
+
         // 找到拖拽分类和目标分类在数组中的索引
         const draggedIdx = appData.categories.indexOf(draggedCategory);
         const targetIdx = appData.categories.indexOf(targetCategory);
-        
+
         // 如果找到了两个分类
         if (draggedIdx !== -1 && targetIdx !== -1) {
             // 移除拖拽分类
             const removedCategory = appData.categories.splice(draggedIdx, 1)[0];
-            
+
             // 在目标位置插入拖拽分类
             appData.categories.splice(targetIdx, 0, removedCategory);
-            
+
             // 保存数据并更新UI
             saveData();
-            
+
             // 获取当前活动的分类
             const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
             const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '全部';
-            
+
             renderCategories(document.getElementById('category-container'), activeCategory);
         }
     }
@@ -1358,133 +1355,133 @@
 
     // 初始化应用
     function initApp() {
-            // 加载数据
-            loadData();
+        // 加载数据
+        loadData();
 
-            // 创建DOM
-            const domElements = createDOM();
-            const { assistant } = domElements;
+        // 创建DOM
+        const domElements = createDOM();
+        const { assistant } = domElements;
 
-            // 根据保存的位置设置侧边栏初始位置
-            if (appData.sidebarPosition === 'left') {
-                assistant.classList.add('left');
+        // 根据保存的位置设置侧边栏初始位置
+        if (appData.sidebarPosition === 'left') {
+            assistant.classList.add('left');
+        } else {
+            assistant.classList.remove('left');
+        }
+
+        // 更新UI
+        updateUI();
+
+        // 添加事件监听
+
+        // 分类弹窗事件
+        document.getElementById('save-category').addEventListener('click', saveCategory);
+        document.getElementById('cancel-category').addEventListener('click', hideCategoryModal);
+
+        // 点击遮罩层关闭弹窗
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) {
+                hideEditModal();
+                hideCategoryModal();
+            }
+        });
+
+        // ESC键关闭弹窗
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                hideEditModal();
+                hideCategoryModal();
+            }
+        });
+
+        // 侧边栏控制
+        const toggleBtn = document.getElementById('toggle-btn');
+        const assistantElement = document.getElementById('personal-info-assistant');
+        const titleElement = document.getElementById('assistant-title');
+
+        // 全局变量，用于跟踪侧边栏是否展开
+        let isExpanded = !assistantElement.classList.contains('collapsed');
+
+        // 按钮点击事件 - 现在用于切换左右位置
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            toggleSidebarPosition();
+        });
+
+        // 标题点击事件 - 根据侧边栏状态切换功能
+        titleElement.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            if (assistantElement.classList.contains('collapsed')) {
+                expandSidebar(); // 如果已收起，则展开
             } else {
-                assistant.classList.remove('left');
+                collapseSidebar(); // 如果已展开，则收起
+            }
+        });
+
+        // 整个侧边栏容器的点击事件 - 当处于收起状态时，点击任何位置都能展开
+        assistantElement.addEventListener('click', (e) => {
+            // 只有当侧边栏处于收起状态且点击的不是按钮和标题时才处理
+            if (assistantElement.classList.contains('collapsed') &&
+                !e.target.closest('.control-btn') &&
+                e.target.id !== 'assistant-title') {
+                expandSidebar();
+            }
+        });
+
+        // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
+        document.addEventListener('click', (e) => {
+            const assistant = document.getElementById('personal-info-assistant');
+            // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
+            // 同时排除编辑弹窗、分类弹窗、删除分类弹窗、右键菜单和遮罩层
+            if (!assistant.contains(e.target) &&
+                isExpanded &&
+                !appData.isFixed &&
+                !e.target.closest('#edit-modal') &&
+                !e.target.closest('#category-modal') &&
+                !e.target.closest('#delete-category-modal') && // 新增：排除删除分类弹窗
+                !e.target.closest('#context-menu') &&
+                !e.target.closest('#overlay')) {
+                collapseSidebar();
+            }
+        });
+
+        // 切换侧边栏左右位置
+        function toggleSidebarPosition() {
+            const currentAssistant = document.getElementById('personal-info-assistant');
+
+            // 切换左右位置类
+            if (currentAssistant.classList.contains('left')) {
+                currentAssistant.classList.remove('left');
+                toggleBtn.textContent = '◀'; // 右箭头表示可以移到左边
+                toggleBtn.title = '移到左侧'; // 更新title属性与图标状态匹配
+                appData.sidebarPosition = 'right'; // 更新位置状态
+            } else {
+                currentAssistant.classList.add('left');
+                toggleBtn.textContent = '▶'; // 左箭头表示可以移到右边
+                toggleBtn.title = '移到右侧'; // 更新title属性与图标状态匹配
+                appData.sidebarPosition = 'left'; // 更新位置状态
             }
 
-            // 更新UI
-            updateUI();
+            saveData(); // 保存位置状态
+        }
 
-            // 添加事件监听
-            
-            // 分类弹窗事件
-            document.getElementById('save-category').addEventListener('click', saveCategory);
-            document.getElementById('cancel-category').addEventListener('click', hideCategoryModal);
-            
-            // 点击遮罩层关闭弹窗
-            overlay.addEventListener('click', function(e) {
-                if (e.target === overlay) {
-                    hideEditModal();
-                    hideCategoryModal();
-                }
-            });
-            
-            // ESC键关闭弹窗
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    hideEditModal();
-                    hideCategoryModal();
-                }
-            });
+        // 展开侧边栏
+        function expandSidebar() {
+            const currentAssistant = document.getElementById('personal-info-assistant');
 
-            // 侧边栏控制
-            const toggleBtn = document.getElementById('toggle-btn');
-            const assistantElement = document.getElementById('personal-info-assistant');
-            const titleElement = document.getElementById('assistant-title');
-            
-            // 全局变量，用于跟踪侧边栏是否展开
-            let isExpanded = !assistantElement.classList.contains('collapsed');
-            
-            // 按钮点击事件 - 现在用于切换左右位置
-            toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止事件冒泡
-                toggleSidebarPosition();
-            });
-            
-            // 标题点击事件 - 根据侧边栏状态切换功能
-            titleElement.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止事件冒泡
-                if (assistantElement.classList.contains('collapsed')) {
-                    expandSidebar(); // 如果已收起，则展开
-                } else {
-                    collapseSidebar(); // 如果已展开，则收起
-                }
-            });
-            
-            // 整个侧边栏容器的点击事件 - 当处于收起状态时，点击任何位置都能展开
-            assistantElement.addEventListener('click', (e) => {
-                // 只有当侧边栏处于收起状态且点击的不是按钮和标题时才处理
-                if (assistantElement.classList.contains('collapsed') && 
-                    !e.target.closest('.control-btn') && 
-                    e.target.id !== 'assistant-title') {
-                    expandSidebar();
-                }
-            });
-            
-            // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
-            document.addEventListener('click', (e) => {
-                const assistant = document.getElementById('personal-info-assistant');
-                // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
-                // 同时排除编辑弹窗、分类弹窗、删除分类弹窗、右键菜单和遮罩层
-                if (!assistant.contains(e.target) && 
-                    isExpanded && 
-                    !appData.isFixed &&
-                    !e.target.closest('#edit-modal') &&
-                    !e.target.closest('#category-modal') &&
-                    !e.target.closest('#delete-category-modal') && // 新增：排除删除分类弹窗
-                    !e.target.closest('#context-menu') &&
-                    !e.target.closest('#overlay')) {
-                    collapseSidebar();
-                }
-            });
-            
-            // 切换侧边栏左右位置
-            function toggleSidebarPosition() {
-                const currentAssistant = document.getElementById('personal-info-assistant');
-                
-                // 切换左右位置类
-                if (currentAssistant.classList.contains('left')) {
-                    currentAssistant.classList.remove('left');
-                    toggleBtn.textContent = '◀'; // 右箭头表示可以移到左边
-                    toggleBtn.title = '移到左侧'; // 更新title属性与图标状态匹配
-                    appData.sidebarPosition = 'right'; // 更新位置状态
-                } else {
-                    currentAssistant.classList.add('left');
-                    toggleBtn.textContent = '▶'; // 左箭头表示可以移到右边
-                    toggleBtn.title = '移到右侧'; // 更新title属性与图标状态匹配
-                    appData.sidebarPosition = 'left'; // 更新位置状态
-                }
-                
-                saveData(); // 保存位置状态
-            }
-            
-            // 展开侧边栏
-            function expandSidebar() {
-                const currentAssistant = document.getElementById('personal-info-assistant');
-                
-                currentAssistant.classList.remove('collapsed');
-                currentAssistant.classList.add('open');
-                isExpanded = true;
-            }
-            
-            // 收起侧边栏
-            function collapseSidebar() {
-                const currentAssistant = document.getElementById('personal-info-assistant');
-                
-                currentAssistant.classList.remove('open');
-                currentAssistant.classList.add('collapsed');
-                isExpanded = false;
-            }
+            currentAssistant.classList.remove('collapsed');
+            currentAssistant.classList.add('open');
+            isExpanded = true;
+        }
+
+        // 收起侧边栏
+        function collapseSidebar() {
+            const currentAssistant = document.getElementById('personal-info-assistant');
+
+            currentAssistant.classList.remove('open');
+            currentAssistant.classList.add('collapsed');
+            isExpanded = false;
+        }
 
         document.getElementById('fix-btn').addEventListener('click', () => {
             assistant.classList.toggle('fixed');
@@ -1494,7 +1491,7 @@
             appData.isFixed = isFixed;
             saveData();
         });
-        
+
         // 分类切换
         document.getElementById('category-container').addEventListener('click', (e) => {
             e.stopPropagation(); // 阻止事件冒泡，防止点击分类区域被误判为外部点击
@@ -1506,51 +1503,51 @@
                 addCategory();
             }
         });
-        
+
         // 分类拖拽排序功能
         let draggedCategoryBtn = null;
         let currentOverCategoryBtn = null;
-        
+
         const categoryContainer = document.getElementById('category-container');
-        
+
         // 分类拖拽开始事件
         categoryContainer.addEventListener('dragstart', (e) => {
             const item = e.target.closest('.category-btn');
             if (item && item.dataset.category !== '全部') {
                 e.stopPropagation();
                 draggedCategoryBtn = item;
-                
+
                 // 立即添加拖拽样式
                 item.classList.add('dragging');
-                
+
                 // 设置拖拽效果类型为移动
                 e.dataTransfer.effectAllowed = 'move';
             }
         });
-        
+
         // 分类拖拽结束事件
         categoryContainer.addEventListener('dragend', (e) => {
             const item = e.target.closest('.category-btn');
             if (item) {
                 item.classList.remove('dragging');
             }
-            
+
             // 清除所有可能残留的样式
             if (currentOverCategoryBtn) {
                 currentOverCategoryBtn.style.borderTop = 'none';
                 currentOverCategoryBtn = null;
             }
-            
+
             draggedCategoryBtn = null;
         });
-        
+
         // 分类拖拽悬停事件
         categoryContainer.addEventListener('dragover', (e) => {
             e.preventDefault();
             // 设置拖拽操作效果
             e.dataTransfer.dropEffect = 'move';
         });
-        
+
         // 分类拖拽进入事件
         categoryContainer.addEventListener('dragenter', (e) => {
             e.preventDefault();
@@ -1561,13 +1558,13 @@
                 if (currentOverCategoryBtn) {
                     currentOverCategoryBtn.style.borderTop = 'none';
                 }
-                
+
                 // 设置当前元素样式
                 currentOverCategoryBtn = item;
                 currentOverCategoryBtn.style.borderTop = '2px solid #4CAF50';
             }
         });
-        
+
         // 分类拖拽离开事件
         categoryContainer.addEventListener('dragleave', (e) => {
             // 检查是否真正离开了元素
@@ -1581,7 +1578,7 @@
                 }
             }
         });
-        
+
         // 分类拖拽放置事件
         categoryContainer.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -1591,13 +1588,13 @@
                 if (currentOverCategoryBtn) {
                     currentOverCategoryBtn.style.borderTop = 'none';
                 }
-                
+
                 // 更新分类顺序
                 const draggedCategory = draggedCategoryBtn.dataset.category;
                 const targetCategory = item.dataset.category;
                 updateCategoryOrder(draggedCategory, targetCategory);
             }
-            
+
             // 重置状态
             currentOverCategoryBtn = null;
         });
@@ -1650,7 +1647,7 @@
             deleteItem(itemId);
         });
 
-                // 分类右键菜单项点击
+        // 分类右键菜单项点击
         document.getElementById('rename-category').addEventListener('click', () => {
             const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
             hideCategoryContextMenu();
@@ -1690,36 +1687,36 @@
         let tooltipTimeout = null; // 存储tooltip延迟显示的定时器ID
         let lastClickedItemContent = null; // 存储最近点击的项目内容
         let autoFillTimeout = null; // 存储自动填充的定时器ID
-        
+
         // 如果没有tooltip元素，尝试创建
         if (!tooltip) {
             createTooltipElement();
             tooltip = document.getElementById('tooltip');
         }
-        
 
-        
+
+
         // 监听整个文档的鼠标移动，更新当前鼠标位置
-        document.addEventListener('mousemove', function(e) {
+        document.addEventListener('mousemove', function (e) {
             currentMousePos = {
                 x: e.clientX,
                 y: e.clientY
             };
         });
-        
+
         // 处理鼠标进入事件（带延迟显示）
         function handleItemMouseEnter(event) {
             const itemId = this.dataset.id;
-            
+
             const item = appData.items.find(i => i.id === itemId);
             if (item) {
-                
+
                 if (item.content) {
                     // 清除之前可能存在的定时器
                     if (tooltipTimeout) {
                         clearTimeout(tooltipTimeout);
                     }
-                    
+
                     // 设置3秒延迟显示tooltip
                     console.log('[Tooltip Debug] 设置3秒延迟显示tooltip');
                     tooltipTimeout = setTimeout(() => {
@@ -1732,7 +1729,7 @@
                 console.warn('[Tooltip Debug] 警告：未找到对应的数据项');
             }
         }
-        
+
         // 处理鼠标离开事件（清除延迟定时器）
         function handleItemMouseLeave() {
             // 清除延迟显示的定时器
@@ -1740,10 +1737,10 @@
                 clearTimeout(tooltipTimeout);
                 tooltipTimeout = null;
             }
-            
+
             hideTooltip();
         }
-        
+
         // 处理信息项点击事件
         function handleItemClick(event) {
             // 检查右键菜单是否可见，如果可见则不执行填充功能
@@ -1751,15 +1748,15 @@
             if (contextMenu && contextMenu.style.display === 'block') {
                 return;
             }
-            
+
             const itemId = this.dataset.id;
             const item = appData.items.find(i => i.id === itemId);
-            
+
             if (item) {
                 // 检查是否按下Shift键和Ctrl键
                 const isShiftPressed = event.shiftKey;
                 const isCtrlPressed = event.ctrlKey;
-                
+
                 // 复制到剪贴板的功能
                 const copyToClipboard = (text) => {
                     navigator.clipboard.writeText(text).then(() => {
@@ -1769,7 +1766,7 @@
                         console.error('[Clipboard Debug] 复制失败:', err);
                     });
                 };
-                
+
                 // Shift+Ctrl组合键：复制标题到剪贴板
                 if (isShiftPressed && isCtrlPressed && item.title) {
                     console.log('[AutoFill Debug] 按下Shift+Ctrl键点击信息项，标题已复制到剪贴板');
@@ -1783,25 +1780,25 @@
                 // Shift键单独按下：存储标题用于自动填充
                 else if (isShiftPressed && !isCtrlPressed && item.title) {
                     console.log('[AutoFill Debug] 按下Shift键点击信息项，标题将在3秒内可自动填充');
-                    
+
                     // 存储点击的项目标题
                     lastClickedItemContent = item.title;
                 }
                 // 没有修饰键：存储内容用于自动填充
                 else if (!isShiftPressed && !isCtrlPressed && item.content) {
                     console.log('[AutoFill Debug] 点击信息项，内容将在3秒内可自动填充');
-                    
+
                     // 存储点击的项目内容
                     lastClickedItemContent = item.content;
                 }
-                
+
                 // 只有在非Ctrl键模式下才设置定时器（自动填充模式）
                 if (!isCtrlPressed) {
                     // 清除之前的定时器
                     if (autoFillTimeout) {
                         clearTimeout(autoFillTimeout);
                     }
-                    
+
                     // 设置3秒后清除内容
                     autoFillTimeout = setTimeout(() => {
                         lastClickedItemContent = null;
@@ -1810,41 +1807,41 @@
                 }
             }
         }
-        
+
         // 设置tooltip事件委托（带日志调试）
         function setupTooltipEvents() {
             // 移除旧的事件监听器
             const infoItems = itemsContainer.querySelectorAll('.info-item');
-            
+
             // 为每个item添加事件监听器
             let addedListeners = 0;
             infoItems.forEach(item => {
                 // 移除可能存在的旧监听器
                 const newItem = item.cloneNode(true);
                 item.parentNode.replaceChild(newItem, item);
-                
+
                 newItem.addEventListener('mouseenter', handleItemMouseEnter);
                 newItem.addEventListener('mouseleave', handleItemMouseLeave);
                 newItem.addEventListener('click', (event) => handleItemClick.call(newItem, event)); // 添加点击事件监听，传递事件对象
                 addedListeners++;
             });
-            
+
         }
-        
+
         // 在渲染完项目后设置事件监听器
         const originalRenderItems = renderItems;
-        renderItems = function(container, filterCategory, searchTerm) {
+        renderItems = function (container, filterCategory, searchTerm) {
             originalRenderItems(container, filterCategory, searchTerm);
             setupTooltipEvents();
         };
-        
+
         // 首次加载时设置事件监听器
         setupTooltipEvents();
 
         // 拖拽排序
         let draggedItem = null;
         let currentOverItem = null;
-        
+
         // 为所有info-item添加draggable属性
         function ensureItemsDraggable() {
             const items = document.querySelectorAll('.info-item:not([draggable="true"])');
@@ -1854,18 +1851,18 @@
                 item.style.cursor = 'grab';
             });
         }
-        
+
         // 在渲染完项目后确保可拖拽性
         const originalRenderItemsForDrag = renderItems;
-        renderItems = function(container, filterCategory, searchTerm) {
+        renderItems = function (container, filterCategory, searchTerm) {
             originalRenderItemsForDrag(container, filterCategory, searchTerm);
             setupTooltipEvents();
             ensureItemsDraggable();
         };
-        
+
         // 初始化时确保可拖拽性
         ensureItemsDraggable();
-        
+
         // 优化的拖拽开始事件
         document.getElementById('items-container').addEventListener('dragstart', (e) => {
             // 使用closest确保即使点击了子元素也能正确识别
@@ -1873,13 +1870,13 @@
             if (item) {
                 e.stopPropagation();
                 draggedItem = item;
-                
+
                 // 立即添加拖拽样式，不使用setTimeout避免延迟
                 item.classList.add('dragging');
-                
+
                 // 设置拖拽效果类型为移动
                 e.dataTransfer.effectAllowed = 'move';
-                
+
                 // 创建一个轻量级的拖拽图像以提高性能
                 const dragImage = document.createElement('div');
                 dragImage.textContent = item.textContent.trim();
@@ -1890,10 +1887,10 @@
                 dragImage.style.borderRadius = '4px';
                 dragImage.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
                 document.body.appendChild(dragImage);
-                
+
                 // 设置自定义拖拽图像
                 e.dataTransfer.setDragImage(dragImage, 20, 20);
-                
+
                 // 拖拽结束后移除临时元素
                 setTimeout(() => document.body.removeChild(dragImage), 0);
             }
@@ -1906,13 +1903,13 @@
                 item.classList.remove('dragging');
                 item.style.cursor = 'grab';
             }
-            
+
             // 清除所有可能残留的样式
             if (currentOverItem) {
                 currentOverItem.style.borderTop = 'none';
                 currentOverItem = null;
             }
-            
+
             draggedItem = null;
         });
 
@@ -1933,7 +1930,7 @@
                 if (currentOverItem) {
                     currentOverItem.style.borderTop = 'none';
                 }
-                
+
                 // 设置当前元素样式
                 currentOverItem = item;
                 currentOverItem.style.borderTop = '2px solid #4CAF50';
@@ -1963,13 +1960,13 @@
                 if (currentOverItem) {
                     currentOverItem.style.borderTop = 'none';
                 }
-                
+
                 // 立即响应，不添加额外延迟
                 const draggedId = draggedItem.dataset.id;
                 const targetId = item.dataset.id;
                 updateItemOrder(draggedId, targetId);
             }
-            
+
             // 重置状态
             currentOverItem = null;
         });
@@ -1979,7 +1976,7 @@
             try {
                 // 聚焦到目标元素
                 element.focus();
-                
+
                 // 选中当前内容（如果有的话）
                 if (element.setSelectionRange) {
                     element.setSelectionRange(0, element.value.length);
@@ -1987,7 +1984,7 @@
                     const range = element.createTextRange();
                     range.select();
                 }
-                
+
                 // 尝试使用document.execCommand('insertText')方法，这更接近真实用户输入
                 try {
                     // 插入新文本，这会替换选中的内容
@@ -1998,7 +1995,7 @@
                     }
                 } catch (execError) {
                     console.warn('[AutoFill Debug] document.execCommand失败，尝试备用方法:', execError);
-                    
+
                     // 备用方法1: 使用Clipboard API
                     if (navigator.clipboard && window.isSecureContext) {
                         console.log('[AutoFill Debug] 尝试使用Clipboard API');
@@ -2034,7 +2031,7 @@
                 }
             }
         }
-        
+
         // 触发输入事件的辅助函数
         function triggerInputEvents(element) {
             // 创建并触发input事件，使用compositionend标记为真实用户输入
@@ -2044,15 +2041,15 @@
             });
             inputEvent.isTrusted = true; // 虽然现代浏览器会忽略这个设置，但还是尝试设置
             element.dispatchEvent(inputEvent);
-            
+
             // 触发compositionstart和compositionend事件，模拟IME输入完成
             const compStartEvent = new Event('compositionstart', { bubbles: true });
             element.dispatchEvent(compStartEvent);
-            
+
             const compEndEvent = new Event('compositionend', { bubbles: true });
             compEndEvent.data = element.value; // 设置完成的文本
             element.dispatchEvent(compEndEvent);
-            
+
             // 触发change事件
             const changeEvent = new Event('change', {
                 bubbles: true,
@@ -2060,7 +2057,7 @@
             });
             element.dispatchEvent(changeEvent);
         }
-        
+
         // 添加全局输入框点击监听，用于自动填充内容
         document.addEventListener('click', (e) => {
             // 检查点击的元素是否为可输入元素并且有最近点击的项目内容
@@ -2072,21 +2069,21 @@
                 targetElement = e.target;
                 console.log('[AutoFill Debug] targetElemnet:', targetElement);
             }
-            
+
             // 执行自动填充
             if (targetElement && lastClickedItemContent) {
                 console.log('[AutoFill Debug] 检测到可输入元素被选中，执行自动填充');
-                
+
                 // 聚焦到目标元素
                 try {
                     targetElement.focus();
                 } catch (err) {
                     console.log('[AutoFill Debug] 无法聚焦到元素:', err);
                 }
-                
+
                 // 使用模拟用户输入的方式填充内容
                 simulateUserInput(targetElement, lastClickedItemContent);
-                
+
                 // 清除缓存的内容，避免重复填充
                 lastClickedItemContent = null;
                 if (autoFillTimeout) {
@@ -2095,81 +2092,47 @@
                 }
             }
         });
-        
+
         // 判断元素是否为可输入元素的通用函数
         function isInputElement(element) {
             // 检查常见的表单输入元素
-            if ((element.tagName === 'INPUT' && 
-                 (element.type === 'text' || element.type === 'email' || 
-                  element.type === 'password' || element.type === 'search' ||
-                  element.type === 'tel' || element.type === 'url' || 
-                  element.type === 'number' || element.type === 'date' ||
-                  element.type === 'datetime-local')) || 
-                element.tagName === 'TEXTAREA' || 
+            if ((element.tagName === 'INPUT' &&
+                (element.type === 'text' || element.type === 'email' ||
+                    element.type === 'password' || element.type === 'search' ||
+                    element.type === 'tel' || element.type === 'url' ||
+                    element.type === 'number' || element.type === 'date' ||
+                    element.type === 'datetime-local')) ||
+                element.tagName === 'TEXTAREA' ||
                 element.tagName === 'SELECT' ||
                 // 检查是否为contenteditable元素
                 element.hasAttribute('contenteditable')) {
                 // 确保元素是可见且可编辑的
-                return isElementVisible(element) && 
-                       !element.disabled && 
-                       !element.readOnly;
+                return isElementVisible(element) &&
+                    !element.disabled &&
+                    !element.readOnly;
             }
             return false;
         }
-        
-        // 查找最近的可输入元素（包括父容器内的输入元素）
-        function findClosestInputElement(element) {
-            // 检查元素本身
-            if (isInputElement(element)) {
-                return element;
-            }
-            
-            // 检查直接子元素
-            const childInputs = element.querySelectorAll('input, textarea, select, [contenteditable="true"]');
-            for (let i = 0; i < childInputs.length; i++) {
-                if (isInputElement(childInputs[i])) {
-                    return childInputs[i];
-                }
-            }
-            
-            // 检查父元素链上是否有包含可输入元素的容器
-            let current = element.parentElement;
-            const maxDepth = 5; // 限制向上查找的深度，避免性能问题
-            let depth = 0;
-            
-            while (current && depth < maxDepth) {
-                const parentInputs = current.querySelectorAll('input, textarea, select, [contenteditable="true"]');
-                for (let i = 0; i < parentInputs.length; i++) {
-                    if (isInputElement(parentInputs[i])) {
-                        return parentInputs[i];
-                    }
-                }
-                current = current.parentElement;
-                depth++;
-            }
-            
-            return null;
-        }
-        
+
         // 检查元素是否可见
         function isElementVisible(element) {
             const style = window.getComputedStyle(element);
-            return (style.display !== 'none' && 
-                    style.visibility !== 'hidden' && 
-                    style.opacity !== '0' && 
-                    element.offsetWidth > 0 && 
-                    element.offsetHeight > 0);
+            return (style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0' &&
+                element.offsetWidth > 0 &&
+                element.offsetHeight > 0);
         }
-        
+
         // 快捷键
         document.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'l' && e.altKey && e.shiftKey) {
                 e.preventDefault();
-                
+
                 isExpanded = !isExpanded;
                 // 直接通过ID获取assistant元素，确保在任何状态下都能正确访问
                 const currentAssistant = document.getElementById('personal-info-assistant');
-                
+
                 if (isExpanded) {
                     // 展开侧边栏
                     currentAssistant.classList.remove('collapsed');
@@ -2185,7 +2148,7 @@
         // 初始化侧边栏状态
         // assistant.classList.add('open'); // 默认展开
         // document.getElementById('toggle-btn').textContent = '◀'; // 默认右箭头表示可以移到左边
-        
+
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
         if (appData.isFixed) {
@@ -2193,7 +2156,7 @@
         } else {
             assistant.classList.remove('fixed');
         }
-        
+
         // 初始化fix-btn的状态，确保与appData.isFixed保持一致
         const fixBtn = document.getElementById('fix-btn');
         fixBtn.textContent = appData.isFixed ? '🔒' : '🔓';
