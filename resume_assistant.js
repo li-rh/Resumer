@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
+// @version 2.1.5
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -455,6 +455,58 @@
             backdrop-filter: blur(4px);
             display: none;
             z-index: 9998;
+        }
+        /* 详情弹窗样式 - 基于编辑弹窗样式但不包含操作按钮 */
+        #detail-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            padding: 25px;
+            width: 90%;
+            max-width: 450px;
+            display: none;
+            z-index: 10000;
+            border: 1px solid #e0e0e0;
+        }
+        
+        #detail-modal .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        
+        #detail-modal .info-field {
+            margin-bottom: 18px;
+        }
+        
+        #detail-modal .field-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #444;
+        }
+        
+        #detail-modal .field-value {
+            padding: 10px 12px;
+            background: #f8f8f8;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        #detail-modal .field-value.content {
+            min-height: 100px;
+            line-height: 1.5;
         }
     `;
 
@@ -1552,15 +1604,140 @@
         const itemsContainer = document.getElementById('items-container');
         let lastClickedItemContent = null; // 存储最近点击的项目内容
         let autoFillTimeout = null; // 存储自动填充的定时器ID
-
-        // 处理鼠标进入事件（带延迟显示）
-        function handleItemMouseEnter(event) {
-
+        // 添加Ctrl+鼠标悬浮显示详情的功能
+        let hoverTimer = null;
+        let isMouseOver = false;
+        // 保存当前鼠标悬浮的元素，用于在全局键盘事件中作为 startHoverTimer 参数
+        let currentHoveredItem = null;
+        // 创建详情弹窗
+        function createDetailModal() {
+            // 检查是否已存在详情弹窗
+            let detailModal = document.getElementById("detail-modal");
+            if (!detailModal) {
+                detailModal = document.createElement("div");
+                detailModal.id = "detail-modal";
+                detailModal.innerHTML = `
+                    <div class="modal-title" id="detail-title"></div>
+                    <div class="info-field">
+                        <div class="field-label">分类</div>
+                        <div class="field-value" id="detail-category"></div>
+                    </div>
+                    <div class="info-field">
+                        <div class="field-label">日期范围</div>
+                        <div class="field-value" id="detail-date"></div>
+                    </div>
+                    <div class="info-field">
+                        <div class="field-label">内容</div>
+                        <div class="field-value content" id="detail-content"></div>
+                    </div>
+                `;
+                document.body.appendChild(detailModal);
+            }
+            return detailModal;
+        }
+        // 显示详情弹窗
+        function showDetailModal(item) {
+            const detailModal = createDetailModal();
+            
+            // 填充详情内容
+            document.getElementById("detail-title").textContent = item.title;
+            document.getElementById("detail-category").textContent = item.category;
+            
+            // 设置日期范围
+            const dateElement = document.getElementById("detail-date");
+            if (item.startDate || item.endDate) {
+                dateElement.textContent = item.startDate && item.endDate 
+                    ? `${item.startDate} - ${item.endDate}` 
+                    : (item.startDate || item.endDate);
+                dateElement.style.display = "block";
+            } else {
+                dateElement.style.display = "none";
+            }
+            
+            document.getElementById("detail-content").textContent = item.content;
+            
+            // 显示弹窗
+            detailModal.style.display = "block";
+        }
+        // 隐藏详情弹窗
+        function hideDetailModal() {
+            const detailModal = document.getElementById("detail-modal");
+            if (detailModal) {
+                detailModal.style.display = "none";
+            }
         }
 
-        // 处理鼠标离开事件（清除延迟定时器）
-        function handleItemMouseLeave() {
+        // 启动计时器的函数
+        function startHoverTimer(item) {
+            // 清除现有定时器
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+            }
+            // 因为showDetailModal需要完整的item对象而不仅仅是dataset
+            // dataset只包含HTML元素上的数据属性，而showDetailModal函数需要title、category等完整信息
+            if (item && item.dataset && item.dataset.id) {
+                // 设置1秒定时器
+                hoverTimer = setTimeout(() => {
+                    // 从appData中获取完整的item数据而不是仅使用dataset
+                    const fullItem = appData.items.find(i => i.id === item.dataset.id);
+                    if (fullItem) {
+                        showDetailModal(fullItem);
+                    }
+                }, 1500);
+            }
+        }
 
+        // 全局键盘事件监听 - 当鼠标悬浮在任意元素上按下Ctrl键时触发
+        document.addEventListener("keydown", function(e) {
+            // 检查是否有元素被悬浮且按下了Ctrl键
+            if (isMouseOver && currentHoveredItem && (e.key === "Control" || e.key === "Ctrl")) {
+                startHoverTimer(currentHoveredItem);
+            }
+        });
+        // 全局键盘事件监听 - 当鼠标悬浮在任意元素上释放Ctrl键时触发
+        document.addEventListener("keyup", function(e) {
+            // 检查是否有元素被悬浮且释放了Ctrl键
+            if (isMouseOver && currentHoveredItem && (e.key === "Control" || e.key === "Ctrl")) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+                hideDetailModal();
+            }
+        });
+
+        // 处理鼠标进入事件
+        function handleItemMouseEnter(e) {
+                isMouseOver = true;
+                // 保存当前悬浮的元素引用
+                currentHoveredItem = this;
+                // 如果此时按住了Ctrl键，启动计时
+                if (e.ctrlKey) {
+                    startHoverTimer(this);
+                }
+        }
+        // 鼠标移动事件 - 处理悬浮期间Ctrl键状态变化
+        function handleItemMouseMove(e) {
+            if (hoverTimer && !e.ctrlKey) {
+                // 释放了Ctrl键，清除定时器
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+                hideDetailModal();
+            } else if (!hoverTimer && e.ctrlKey) {
+                // 按下了Ctrl键，启动计时
+                startHoverTimer(this);
+            }
+        }
+        // 处理鼠标离开事件
+        function handleItemMouseLeave() {
+            isMouseOver = false;
+            // 清除当前悬浮元素引用
+            currentHoveredItem = null;
+            // 清除定时器
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+            // 隐藏详情弹窗
+            hideDetailModal();
         }
 
         // 处理信息项点击事件
@@ -1640,9 +1817,10 @@
                 // 移除可能存在的旧监听器
                 const newItem = item.cloneNode(true);
                 item.parentNode.replaceChild(newItem, item);
-
-                newItem.addEventListener('mouseenter', handleItemMouseEnter);
-                newItem.addEventListener('mouseleave', handleItemMouseLeave);
+                
+                newItem.addEventListener('mouseenter', (event) => handleItemMouseEnter.call(newItem, event));
+                newItem.addEventListener('mousemove', (event) => handleItemMouseMove.call(newItem, event));
+                newItem.addEventListener('mouseleave', (event) => handleItemMouseLeave.call(newItem, event));
                 newItem.addEventListener('click', (event) => handleItemClick.call(newItem, event)); // 添加点击事件监听，传递事件对象
             });
         }
