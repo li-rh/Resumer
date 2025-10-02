@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -1554,31 +1554,58 @@
             const item = appData.items.find(i => i.id === itemId);
             
             if (item) {
-                // 检查是否按下Shift键
+                // 检查是否按下Shift键和Ctrl键
                 const isShiftPressed = event.shiftKey;
+                const isCtrlPressed = event.ctrlKey;
                 
-                if (isShiftPressed && item.title) {
+                // 复制到剪贴板的功能
+                const copyToClipboard = (text) => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        console.log('[Clipboard Debug] 成功复制到剪贴板:', text);
+                        // 可以在这里添加一个临时提示
+                    }).catch(err => {
+                        console.error('[Clipboard Debug] 复制失败:', err);
+                    });
+                };
+                
+                // Shift+Ctrl组合键：复制标题到剪贴板
+                if (isShiftPressed && isCtrlPressed && item.title) {
+                    console.log('[AutoFill Debug] 按下Shift+Ctrl键点击信息项，标题已复制到剪贴板');
+                    copyToClipboard(item.title);
+                }
+                // Ctrl键单独按下：复制内容到剪贴板
+                else if (!isShiftPressed && isCtrlPressed && item.content) {
+                    console.log('[AutoFill Debug] 按下Ctrl键点击信息项，内容已复制到剪贴板');
+                    copyToClipboard(item.content);
+                }
+                // Shift键单独按下：存储标题用于自动填充
+                else if (isShiftPressed && !isCtrlPressed && item.title) {
                     console.log('[AutoFill Debug] 按下Shift键点击信息项，标题将在3秒内可自动填充');
                     
                     // 存储点击的项目标题
                     lastClickedItemContent = item.title;
-                } else if (!isShiftPressed && item.content) {
+                }
+                // 没有修饰键：存储内容用于自动填充
+                else if (!isShiftPressed && !isCtrlPressed && item.content) {
                     console.log('[AutoFill Debug] 点击信息项，内容将在3秒内可自动填充');
                     
                     // 存储点击的项目内容
                     lastClickedItemContent = item.content;
                 }
                 
-                // 清除之前的定时器
-                if (autoFillTimeout) {
-                    clearTimeout(autoFillTimeout);
+                // 只有在非Ctrl键模式下才设置定时器（自动填充模式）
+                if (!isCtrlPressed) {
+                    // 清除之前的定时器
+                    if (autoFillTimeout) {
+                        clearTimeout(autoFillTimeout);
+                    }
+                    
+                    // 设置3秒后清除内容
+                    autoFillTimeout = setTimeout(() => {
+                        lastClickedItemContent = null;
+                        console.log('[AutoFill Debug] 自动填充超时，已清除缓存的内容');
+                    }, 3000);
                 }
-                
-                // 设置3秒后清除内容
-                autoFillTimeout = setTimeout(() => {
-                    lastClickedItemContent = null;
-                    console.log('[AutoFill Debug] 自动填充超时，已清除缓存的内容');
-                }, 3000);
             }
         }
         
