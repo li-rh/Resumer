@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.6.2
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -1216,21 +1216,33 @@
     }
     // 更新拖拽排序
     function updateItemOrder(draggedId, targetId) {
-        const draggedIndex = appData.items.findIndex(item => item.id === draggedId);
-        const targetIndex = appData.items.findIndex(item => item.id === targetId);
+        const draggedItem = appData.items.find(item => item.id === draggedId);
+        const targetItem = appData.items.find(item => item.id === targetId);
 
-        if (draggedIndex !== -1 && targetIndex !== -1) {
-            // 调整order值
-            const draggedItem = appData.items[draggedIndex];
-            const targetItem = appData.items[targetIndex];
-
-            // 简单的交换order值
-            const tempOrder = draggedItem.order;
-            draggedItem.order = targetItem.order;
-            targetItem.order = tempOrder;
-
-            saveData();
-            updateUI();
+        if (draggedItem && targetItem) {
+            // 先将所有项目按当前order值排序
+            appData.items.sort((a, b) => a.order - b.order);
+            
+            // 找到拖拽项目和目标项目在排序后的数组中的索引
+            const draggedIdx = appData.items.findIndex(item => item.id === draggedId);
+            const targetIdx = appData.items.findIndex(item => item.id === targetId);
+            
+            // 如果找到了两个项目
+            if (draggedIdx !== -1 && targetIdx !== -1) {
+                // 移除拖拽项目
+                const removedItem = appData.items.splice(draggedIdx, 1)[0];
+                
+                // 在目标位置插入拖拽项目
+                appData.items.splice(targetIdx, 0, removedItem);
+                
+                // 重新分配order值，保持连续的顺序
+                appData.items.forEach((item, index) => {
+                    item.order = index + 1; // 从1开始编号
+                });
+                
+                saveData();
+                updateUI();
+            }
         }
     }
 
@@ -1641,49 +1653,135 @@
 
         // 拖拽排序
         let draggedItem = null;
+        let currentOverItem = null;
+        
+        // 为所有info-item添加draggable属性
+        function ensureItemsDraggable() {
+            const items = document.querySelectorAll('.info-item:not([draggable="true"])');
+            items.forEach(item => {
+                item.setAttribute('draggable', 'true');
+                // 设置CSS光标样式以提升视觉反馈
+                item.style.cursor = 'grab';
+            });
+        }
+        
+        // 在渲染完项目后确保可拖拽性
+        const originalRenderItemsForDrag = renderItems;
+        renderItems = function(container, filterCategory, searchTerm) {
+            originalRenderItemsForDrag(container, filterCategory, searchTerm);
+            setupTooltipEvents();
+            ensureItemsDraggable();
+        };
+        
+        // 初始化时确保可拖拽性
+        ensureItemsDraggable();
+        
+        // 优化的拖拽开始事件
         document.getElementById('items-container').addEventListener('dragstart', (e) => {
-            if (e.target.classList.contains('info-item')) {
-                draggedItem = e.target;
-                setTimeout(() => {
-                    e.target.classList.add('dragging');
-                }, 0);
+            // 使用closest确保即使点击了子元素也能正确识别
+            const item = e.target.closest('.info-item');
+            if (item) {
+                e.stopPropagation();
+                draggedItem = item;
+                
+                // 立即添加拖拽样式，不使用setTimeout避免延迟
+                item.classList.add('dragging');
+                
+                // 设置拖拽效果类型为移动
+                e.dataTransfer.effectAllowed = 'move';
+                
+                // 创建一个轻量级的拖拽图像以提高性能
+                const dragImage = document.createElement('div');
+                dragImage.textContent = item.textContent.trim();
+                dragImage.style.opacity = '0.8';
+                dragImage.style.backgroundColor = '#fff';
+                dragImage.style.border = '1px solid #ddd';
+                dragImage.style.padding = '8px';
+                dragImage.style.borderRadius = '4px';
+                dragImage.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                document.body.appendChild(dragImage);
+                
+                // 设置自定义拖拽图像
+                e.dataTransfer.setDragImage(dragImage, 20, 20);
+                
+                // 拖拽结束后移除临时元素
+                setTimeout(() => document.body.removeChild(dragImage), 0);
             }
         });
 
+        // 优化的拖拽结束事件
         document.getElementById('items-container').addEventListener('dragend', (e) => {
-            if (e.target.classList.contains('info-item')) {
-                e.target.classList.remove('dragging');
-                draggedItem = null;
+            const item = e.target.closest('.info-item');
+            if (item) {
+                item.classList.remove('dragging');
+                item.style.cursor = 'grab';
             }
+            
+            // 清除所有可能残留的样式
+            if (currentOverItem) {
+                currentOverItem.style.borderTop = 'none';
+                currentOverItem = null;
+            }
+            
+            draggedItem = null;
         });
 
+        // 优化的拖拽悬停事件
         document.getElementById('items-container').addEventListener('dragover', (e) => {
             e.preventDefault();
+            // 设置拖拽操作效果
+            e.dataTransfer.dropEffect = 'move';
         });
 
+        // 优化的拖拽进入事件
         document.getElementById('items-container').addEventListener('dragenter', (e) => {
             e.preventDefault();
-            if (e.target.classList.contains('info-item') && e.target !== draggedItem) {
-                e.target.style.borderTop = '2px solid #4CAF50';
+            // 确保不处理子元素的事件
+            const item = e.target.closest('.info-item');
+            if (item && item !== draggedItem && item !== currentOverItem) {
+                // 清除之前元素的样式
+                if (currentOverItem) {
+                    currentOverItem.style.borderTop = 'none';
+                }
+                
+                // 设置当前元素样式
+                currentOverItem = item;
+                currentOverItem.style.borderTop = '2px solid #4CAF50';
             }
         });
 
+        // 优化的拖拽离开事件
         document.getElementById('items-container').addEventListener('dragleave', (e) => {
-            if (e.target.classList.contains('info-item')) {
-                e.target.style.borderTop = 'none';
+            // 检查是否真正离开了元素
+            const item = e.target.closest('.info-item');
+            if (item && currentOverItem === item) {
+                // 检查是否只是移动到了子元素上
+                const relatedTarget = e.relatedTarget;
+                if (!item.contains(relatedTarget)) {
+                    item.style.borderTop = 'none';
+                    currentOverItem = null;
+                }
             }
         });
 
+        // 优化的放置事件
         document.getElementById('items-container').addEventListener('drop', (e) => {
             e.preventDefault();
-            if (e.target.classList.contains('info-item') && e.target !== draggedItem) {
-                e.target.style.borderTop = 'none';
-
-                // 更新排序
+            const item = e.target.closest('.info-item');
+            if (item && item !== draggedItem) {
+                // 清除所有样式
+                if (currentOverItem) {
+                    currentOverItem.style.borderTop = 'none';
+                }
+                
+                // 立即响应，不添加额外延迟
                 const draggedId = draggedItem.dataset.id;
-                const targetId = e.target.dataset.id;
+                const targetId = item.dataset.id;
                 updateItemOrder(draggedId, targetId);
             }
+            
+            // 重置状态
+            currentOverItem = null;
         });
 
         // 使用更接近真实用户操作的方式填充内容
