@@ -2139,9 +2139,9 @@
 
         // 初始化侧边栏状态
         // 默认展开 测试专用
-        isExpanded = true;
-        document.getElementById('personal-info-assistant').classList.remove('collapsed');
-        document.getElementById('personal-info-assistant').classList.add('open');
+        // isExpanded = true;
+        // document.getElementById('personal-info-assistant').classList.remove('collapsed');
+        // document.getElementById('personal-info-assistant').classList.add('open');
 
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
