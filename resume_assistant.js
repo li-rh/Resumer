@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      1.6.2
+// @version      2.0.1
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -171,6 +171,12 @@
             background: #f0f0f0;
             transform: translateX(2px);
             color: #333;
+        }
+        
+        /* 分类拖拽相关样式 */
+        .category-btn.dragging {
+            opacity: 0.5;
+            border: 2px dashed #666;
         }
         .category-btn .delete-category {
             position: absolute;
@@ -676,6 +682,8 @@
         allBtn.className = `category-btn ${activeCategory === '全部' ? 'active' : ''}`;
         allBtn.textContent = '全部';
         allBtn.dataset.category = '全部';
+        // "全部"分类不可拖拽
+        allBtn.draggable = false;
         container.appendChild(allBtn);
         // 添加分类标签
         appData.categories.forEach(category => {
@@ -683,6 +691,8 @@
             btn.className = `category-btn ${activeCategory === category ? 'active' : ''}`;
             btn.textContent = category;
             btn.dataset.category = category;
+            // 设置分类按钮可拖拽
+            btn.draggable = true;
             // 为分类按钮绑定右键菜单事件
             btn.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
@@ -694,6 +704,7 @@
         const addBtn = document.createElement('button');
         addBtn.id = 'add-category';
         addBtn.textContent = '+';
+        addBtn.draggable = false;
         container.appendChild(addBtn);
     }
 
@@ -1214,7 +1225,7 @@
         // 自动聚焦到输入框
         document.getElementById('new-category-name').focus();
     }
-    // 更新拖拽排序
+    // 更新项目拖拽排序
     function updateItemOrder(draggedId, targetId) {
         const draggedItem = appData.items.find(item => item.id === draggedId);
         const targetItem = appData.items.find(item => item.id === targetId);
@@ -1245,6 +1256,36 @@
             }
         }
     }
+    
+    // 更新分类拖拽排序
+    function updateCategoryOrder(draggedCategory, targetCategory) {
+        // 跳过"全部"分类的排序
+        if (draggedCategory === '全部' || targetCategory === '全部') {
+            return;
+        }
+        
+        // 找到拖拽分类和目标分类在数组中的索引
+        const draggedIdx = appData.categories.indexOf(draggedCategory);
+        const targetIdx = appData.categories.indexOf(targetCategory);
+        
+        // 如果找到了两个分类
+        if (draggedIdx !== -1 && targetIdx !== -1) {
+            // 移除拖拽分类
+            const removedCategory = appData.categories.splice(draggedIdx, 1)[0];
+            
+            // 在目标位置插入拖拽分类
+            appData.categories.splice(targetIdx, 0, removedCategory);
+            
+            // 保存数据并更新UI
+            saveData();
+            
+            // 获取当前活动的分类
+            const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
+            const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '全部';
+            
+            renderCategories(document.getElementById('category-container'), activeCategory);
+        }
+    }
 
     // 更新UI
     function updateUI() {
@@ -1262,7 +1303,7 @@
     }
 
     // 初始化应用
-        function initApp() {
+    function initApp() {
             // 加载数据
             loadData();
 
@@ -1410,6 +1451,101 @@
             } else if (e.target.id === 'add-category') {
                 addCategory();
             }
+        });
+        
+        // 分类拖拽排序功能
+        let draggedCategoryBtn = null;
+        let currentOverCategoryBtn = null;
+        
+        const categoryContainer = document.getElementById('category-container');
+        
+        // 分类拖拽开始事件
+        categoryContainer.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.category-btn');
+            if (item && item.dataset.category !== '全部') {
+                e.stopPropagation();
+                draggedCategoryBtn = item;
+                
+                // 立即添加拖拽样式
+                item.classList.add('dragging');
+                
+                // 设置拖拽效果类型为移动
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        });
+        
+        // 分类拖拽结束事件
+        categoryContainer.addEventListener('dragend', (e) => {
+            const item = e.target.closest('.category-btn');
+            if (item) {
+                item.classList.remove('dragging');
+            }
+            
+            // 清除所有可能残留的样式
+            if (currentOverCategoryBtn) {
+                currentOverCategoryBtn.style.borderTop = 'none';
+                currentOverCategoryBtn = null;
+            }
+            
+            draggedCategoryBtn = null;
+        });
+        
+        // 分类拖拽悬停事件
+        categoryContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            // 设置拖拽操作效果
+            e.dataTransfer.dropEffect = 'move';
+        });
+        
+        // 分类拖拽进入事件
+        categoryContainer.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            // 确保不处理子元素的事件
+            const item = e.target.closest('.category-btn');
+            if (item && item !== draggedCategoryBtn && item !== currentOverCategoryBtn && item.dataset.category !== '全部') {
+                // 清除之前元素的样式
+                if (currentOverCategoryBtn) {
+                    currentOverCategoryBtn.style.borderTop = 'none';
+                }
+                
+                // 设置当前元素样式
+                currentOverCategoryBtn = item;
+                currentOverCategoryBtn.style.borderTop = '2px solid #4CAF50';
+            }
+        });
+        
+        // 分类拖拽离开事件
+        categoryContainer.addEventListener('dragleave', (e) => {
+            // 检查是否真正离开了元素
+            const item = e.target.closest('.category-btn');
+            if (item && currentOverCategoryBtn === item) {
+                // 检查是否只是移动到了子元素上
+                const relatedTarget = e.relatedTarget;
+                if (!item.contains(relatedTarget)) {
+                    item.style.borderTop = 'none';
+                    currentOverCategoryBtn = null;
+                }
+            }
+        });
+        
+        // 分类拖拽放置事件
+        categoryContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const item = e.target.closest('.category-btn');
+            if (item && item !== draggedCategoryBtn && item.dataset.category !== '全部' && draggedCategoryBtn) {
+                // 清除所有样式
+                if (currentOverCategoryBtn) {
+                    currentOverCategoryBtn.style.borderTop = 'none';
+                }
+                
+                // 更新分类顺序
+                const draggedCategory = draggedCategoryBtn.dataset.category;
+                const targetCategory = item.dataset.category;
+                updateCategoryOrder(draggedCategory, targetCategory);
+            }
+            
+            // 重置状态
+            currentOverCategoryBtn = null;
         });
 
         // 搜索功能
