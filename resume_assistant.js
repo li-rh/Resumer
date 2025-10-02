@@ -351,29 +351,6 @@
         .context-menu-item:hover {
             background: #f0f0f0;
         }
-        #tooltip {
-            position: fixed;
-            display: block;
-            opacity: 0;
-            transform: translateY(10px) scale(0.95);
-            background-color: #333;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            max-width: 450px;
-            word-wrap: break-word;
-            z-index: 2147483647;
-            line-height: 1.4;
-            font-size: 14px;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        #tooltip.show {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
         #edit-modal {
             position: fixed;
             top: 50%;
@@ -591,9 +568,6 @@
         // 复制条目右键菜单的样式
         categoryContextMenu.style.cssText = 'position: fixed; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 8px 0; display: none; z-index: 10000; min-width: 120px;';
 
-        // 创建提示框
-        const tooltip = document.createElement('div');
-        tooltip.id = 'tooltip';
 
         // 创建编辑弹窗
         const editModal = document.createElement('div');
@@ -651,7 +625,6 @@
         document.body.appendChild(assistant);
         document.body.appendChild(contextMenu);
         document.body.appendChild(categoryContextMenu);
-        document.body.appendChild(tooltip);
         document.body.appendChild(editModal);
         document.body.appendChild(categoryModal);
         document.body.appendChild(overlay);
@@ -664,7 +637,6 @@
             itemsContainer,
             footer,
             contextMenu,
-            tooltip,
             editModal,
             categoryModal,
             overlay
@@ -772,111 +744,6 @@
     // 隐藏分类右键菜单
     function hideCategoryContextMenu() {
         document.getElementById('category-context-menu').style.display = 'none';
-    }
-    // 显示提示框，与条目宽度相同且对齐
-    function showTooltip(content, itemElement) {
-        // 获取tooltip元素，如果不存在则创建
-        let tooltip = document.getElementById('tooltip');
-        if (!tooltip) {
-            createTooltipElement();
-            tooltip = document.getElementById('tooltip');
-            if (!tooltip) return;
-        }
-
-        // 移除show类以重置动画
-        tooltip.classList.remove('show');
-
-        // 设置提示框内容，最多显示50个字符
-        const displayContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
-        tooltip.textContent = displayContent;
-
-        // 强制设置显示样式
-        tooltip.style.visibility = 'hidden'; // 先设置为不可见以获取尺寸
-        tooltip.style.position = 'fixed';
-        tooltip.style.zIndex = '9999';
-        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        tooltip.style.color = 'white';
-        tooltip.style.padding = '10px 15px';
-        tooltip.style.borderRadius = '4px';
-        tooltip.style.fontSize = '14px';
-        tooltip.style.pointerEvents = 'none';
-
-        // 计算位置 - 与条目宽度相同且水平对齐
-        if (itemElement) {
-            const itemRect = itemElement.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            // 设置tooltip宽度与条目相同
-            tooltip.style.width = `${itemRect.width}px`;
-            tooltip.style.maxWidth = `${itemRect.width}px`;
-
-            // 计算垂直位置：条目下方10px
-            let top = itemRect.bottom + 10;
-
-            // 视口边界检查 - 垂直方向
-            if (top + tooltip.offsetHeight > viewportHeight - 10) {
-                // 如果下方空间不足，显示在条目上方
-                top = itemRect.top - tooltip.offsetHeight - 10;
-            }
-            top = Math.max(10, Math.min(top, viewportHeight - tooltip.offsetHeight - 10));
-
-            // 设置位置 - 水平与条目左边缘对齐
-            tooltip.style.left = `${itemRect.left}px`;
-            tooltip.style.top = `${top}px`;
-        }
-
-        // 强制回流，确保动画生效
-        tooltip.offsetWidth;
-
-        // 显示tooltip
-        tooltip.style.visibility = 'visible';
-        // 使用setTimeout确保样式应用后再添加show类以触发动画
-        setTimeout(() => {
-            tooltip.classList.add('show');
-        }, 10);
-    }
-
-    // 创建tooltip元素
-    function createTooltipElement() {
-        try {
-            const existingTooltip = document.getElementById('tooltip');
-            if (!existingTooltip) {
-                const tooltip = document.createElement('div');
-                tooltip.id = 'tooltip';
-                tooltip.style.cssText = 'display:block; visibility:visible; opacity:1; z-index:9999; position:fixed; background-color:rgba(0,0,0,0.8); color:white; padding:10px 15px; border-radius:4px; max-width:450px; font-size:14px; pointer-events:none;';
-                document.body.appendChild(tooltip);
-            }
-        } catch (error) {
-            console.error('[Tooltip Debug] 创建tooltip元素失败:', error);
-        }
-    }
-
-    // 隐藏提示框（带日志调试）
-    function hideTooltip() {
-        try {
-            const tooltip = document.getElementById('tooltip');
-            if (tooltip) {
-                // 移除show类，触发淡出动画
-                tooltip.classList.remove('show');
-
-                // 等待动画完成后再完全隐藏
-                setTimeout(() => {
-                    if (tooltip && !tooltip.classList.contains('show')) {
-                        tooltip.style.visibility = 'hidden';
-                        console.log('[Tooltip Debug] 已移除show类并隐藏tooltip');
-                    }
-                }, 300);
-            }
-
-            // 同时移除临时tooltip
-            const tempTooltip = document.getElementById('temp-tooltip');
-            if (tempTooltip) {
-                tempTooltip.remove();
-            }
-        } catch (error) {
-            console.error('[Tooltip Debug] hideTooltip函数执行出错:', error);
-        }
     }
 
     // 显示编辑弹窗
@@ -1680,65 +1547,20 @@
         document.getElementById('save-edit').addEventListener('click', saveItem);
         document.getElementById('overlay').addEventListener('click', hideEditModal);
 
-        // 初始化tooltip相关变量
-        let tooltip = document.getElementById('tooltip');
+///////////////////////////////////////////////// 信息项事件监听器 开始 ///////////////////////////////////////////////////
+        // 初始化 items 相关变量
         const itemsContainer = document.getElementById('items-container');
-        let currentMousePos = { x: 100, y: 100 }; // 设置默认位置，避免初始为null
-        let tooltipTimeout = null; // 存储tooltip延迟显示的定时器ID
         let lastClickedItemContent = null; // 存储最近点击的项目内容
         let autoFillTimeout = null; // 存储自动填充的定时器ID
 
-        // 如果没有tooltip元素，尝试创建
-        if (!tooltip) {
-            createTooltipElement();
-            tooltip = document.getElementById('tooltip');
-        }
-
-
-
-        // 监听整个文档的鼠标移动，更新当前鼠标位置
-        document.addEventListener('mousemove', function (e) {
-            currentMousePos = {
-                x: e.clientX,
-                y: e.clientY
-            };
-        });
-
         // 处理鼠标进入事件（带延迟显示）
         function handleItemMouseEnter(event) {
-            const itemId = this.dataset.id;
 
-            const item = appData.items.find(i => i.id === itemId);
-            if (item) {
-
-                if (item.content) {
-                    // 清除之前可能存在的定时器
-                    if (tooltipTimeout) {
-                        clearTimeout(tooltipTimeout);
-                    }
-
-                    // 设置3秒延迟显示tooltip
-                    console.log('[Tooltip Debug] 设置3秒延迟显示tooltip');
-                    tooltipTimeout = setTimeout(() => {
-                        showTooltip(item.content, this); // 传递当前条目元素
-                    }, 3000); // 3秒延迟
-                } else {
-                    console.log('[Tooltip Debug] 数据项没有内容，不显示tooltip');
-                }
-            } else {
-                console.warn('[Tooltip Debug] 警告：未找到对应的数据项');
-            }
         }
 
         // 处理鼠标离开事件（清除延迟定时器）
         function handleItemMouseLeave() {
-            // 清除延迟显示的定时器
-            if (tooltipTimeout) {
-                clearTimeout(tooltipTimeout);
-                tooltipTimeout = null;
-            }
 
-            hideTooltip();
         }
 
         // 处理信息项点击事件
@@ -1808,13 +1630,12 @@
             }
         }
 
-        // 设置tooltip事件委托（带日志调试）
-        function setupTooltipEvents() {
+        // 设置信息项事件监听器
+        function setupItemEvents() {
             // 移除旧的事件监听器
             const infoItems = itemsContainer.querySelectorAll('.info-item');
 
             // 为每个item添加事件监听器
-            let addedListeners = 0;
             infoItems.forEach(item => {
                 // 移除可能存在的旧监听器
                 const newItem = item.cloneNode(true);
@@ -1823,22 +1644,13 @@
                 newItem.addEventListener('mouseenter', handleItemMouseEnter);
                 newItem.addEventListener('mouseleave', handleItemMouseLeave);
                 newItem.addEventListener('click', (event) => handleItemClick.call(newItem, event)); // 添加点击事件监听，传递事件对象
-                addedListeners++;
             });
-
         }
-
-        // 在渲染完项目后设置事件监听器
-        const originalRenderItems = renderItems;
-        renderItems = function (container, filterCategory, searchTerm) {
-            originalRenderItems(container, filterCategory, searchTerm);
-            setupTooltipEvents();
-        };
-
         // 首次加载时设置事件监听器
-        setupTooltipEvents();
+        setupItemEvents();
+/////////////////////////////////////////////////// 信息项事件监听器 结束 ///////////////////////////////////////////////////
 
-        // 拖拽排序
+/////////////////////////////////////////////////// items-container 拖拽排序功能 开始 ///////////////////////////////////////////////////
         let draggedItem = null;
         let currentOverItem = null;
 
@@ -1851,14 +1663,6 @@
                 item.style.cursor = 'grab';
             });
         }
-
-        // 在渲染完项目后确保可拖拽性
-        const originalRenderItemsForDrag = renderItems;
-        renderItems = function (container, filterCategory, searchTerm) {
-            originalRenderItemsForDrag(container, filterCategory, searchTerm);
-            setupTooltipEvents();
-            ensureItemsDraggable();
-        };
 
         // 初始化时确保可拖拽性
         ensureItemsDraggable();
@@ -1970,7 +1774,17 @@
             // 重置状态
             currentOverItem = null;
         });
+/////////////////////////////////////////////////// items-container 拖拽排序功能 结束 ///////////////////////////////////////////////////
 
+/////////////////////////////////////////////////// 增加 renderItems 功能 开始 ///////////////////////////////////////////////////
+        // 在渲染完项目后确保可拖拽性以及设置事件监听器
+        const originalRenderItemsForDrag = renderItems;
+        renderItems = function (container, filterCategory, searchTerm) {
+            originalRenderItemsForDrag(container, filterCategory, searchTerm);
+            setupItemEvents();
+            ensureItemsDraggable();
+        };
+/////////////////////////////////////////////////// 增加 renderItems 功能 结束 ///////////////////////////////////////////////////
         // 使用更接近真实用户操作的方式填充内容
         function simulateUserInput(element, text) {
             try {
@@ -2146,15 +1960,17 @@
         });
 
         // 初始化侧边栏状态
-        // assistant.classList.add('open'); // 默认展开
-        // document.getElementById('toggle-btn').textContent = '◀'; // 默认右箭头表示可以移到左边
+        // 默认展开 测试专用
+        isExpanded = true;
+        document.getElementById('personal-info-assistant').classList.remove('collapsed');
+        document.getElementById('personal-info-assistant').classList.add('open');
 
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
         if (appData.isFixed) {
-            assistant.classList.add('fixed');
+            document.getElementById('personal-info-assistant').classList.add('fixed');
         } else {
-            assistant.classList.remove('fixed');
+            document.getElementById('personal-info-assistant').classList.remove('fixed');
         }
 
         // 初始化fix-btn的状态，确保与appData.isFixed保持一致
