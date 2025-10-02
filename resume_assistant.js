@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.1.1
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -919,6 +919,13 @@
             // 添加模式
             modal.dataset.itemId = '';
             document.querySelector('.modal-title').textContent = '添加信息';
+            
+            // 获取当前活动的分类，并设置为默认分类（跳过'全部'分类）
+            const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
+            const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '';
+            if (activeCategory && activeCategory !== '全部' && appData.categories.includes(activeCategory)) {
+                document.getElementById('edit-category').value = activeCategory;
+            }
         }
 
         // 显示弹窗
@@ -985,11 +992,58 @@
 
     // 删除信息项
     function deleteItem(itemId) {
-        if (confirm('确定要删除这条信息吗？')) {
+        // 创建或获取删除确认弹窗
+        let deleteModal = document.getElementById('delete-item-modal');
+        if (!deleteModal) {
+            deleteModal = document.createElement('div');
+            deleteModal.id = 'delete-item-modal';
+            deleteModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
+            deleteModal.innerHTML = `
+                <div class="modal-title">删除信息</div>
+                <div style="margin: 20px 0; font-size: 14px; color: #333;">
+                    确定要删除这条信息吗？此操作无法撤销。
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-delete-item">取消</button>
+                    <button class="btn btn-primary" id="confirm-delete-item">确定</button>
+                </div>
+            `;
+            document.body.appendChild(deleteModal);
+        }
+
+        // 显示弹窗和遮罩
+        const overlay = document.getElementById('overlay');
+        deleteModal.style.display = 'block';
+        overlay.style.display = 'block';
+
+        // 为“确定”按钮添加一次性事件监听器
+        const confirmBtn = document.getElementById('confirm-delete-item');
+        const cancelBtn = document.getElementById('cancel-delete-item');
+
+        // 使用 { once: true } 确保监听器只执行一次，避免重复绑定
+        confirmBtn.addEventListener('click', function handler() {
+            // 执行删除操作
             appData.items = appData.items.filter(item => item.id !== itemId);
             saveData();
             updateUI();
-        }
+            // 隐藏弹窗
+            deleteModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        // 为“取消”按钮添加一次性事件监听器
+        cancelBtn.addEventListener('click', function handler() {
+            deleteModal.style.display = 'none';
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        // 点击遮罩层关闭
+        overlay.addEventListener('click', function handler(e) {
+            if (e.target === overlay) {
+                deleteModal.style.display = 'none';
+                overlay.style.display = 'none';
+            }
+        }, { once: true });
     }
 
     // 显示分类弹窗
