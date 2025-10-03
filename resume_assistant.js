@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
+// @version      2.2.2
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -360,7 +360,7 @@
             transform: translateY(0);
             box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
         }
-        #context-menu {
+        .context-menu {
             position: fixed;
             background: white;
             border: 1px solid #ddd;
@@ -704,6 +704,7 @@
 
         // 创建右键菜单
         const contextMenu = document.createElement('div');
+        contextMenu.classList.add('context-menu');
         contextMenu.id = 'context-menu';
         contextMenu.innerHTML = `
             <div class="context-menu-item" id="edit-item">编辑</div>
@@ -712,14 +713,12 @@
 
         // 创建分类右键菜单
         const categoryContextMenu = document.createElement('div');
+        categoryContextMenu.classList.add('context-menu');
         categoryContextMenu.id = 'category-context-menu';
         categoryContextMenu.innerHTML = `
             <div class="context-menu-item" id="rename-category">重命名</div>
             <div class="context-menu-item" id="delete-category-menu">删除</div>
         `;
-        // 复制条目右键菜单的样式
-        categoryContextMenu.style.cssText = 'position: fixed; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 8px 0; display: none; z-index: 10000; min-width: 120px;';
-
 
         // 创建编辑弹窗
         const editModal = document.createElement('div');
@@ -814,11 +813,6 @@
             btn.dataset.category = category;
             // 设置分类按钮可拖拽
             btn.draggable = true;
-            // 为分类按钮绑定右键菜单事件
-            btn.addEventListener('contextmenu', function (e) {
-                e.preventDefault();
-                showCategoryContextMenu(e, category);
-            });
             container.appendChild(btn);
         });
         // 添加分类按钮
@@ -867,7 +861,7 @@
         });
     }
 
-    // 显示右键菜单
+    // 显示条目右键菜单
     function showContextMenu(event, itemId) {
         const contextMenu = document.getElementById('context-menu');
         contextMenu.style.left = `${event.clientX}px`;
@@ -878,7 +872,7 @@
         contextMenu.dataset.itemId = itemId;
     }
 
-    // 隐藏右键菜单
+    // 隐藏条目右键菜单
     function hideContextMenu() {
         document.getElementById('context-menu').style.display = 'none';
     }
@@ -898,7 +892,7 @@
         document.getElementById('category-context-menu').style.display = 'none';
     }
 
-    // 显示编辑弹窗
+    // 显示条目编辑弹窗
     function showEditModal(itemId = null) {
         const modal = document.getElementById('edit-modal');
         const overlay = document.getElementById('overlay');
@@ -952,13 +946,13 @@
         document.getElementById('edit-title').focus();
     }
 
-    // 隐藏编辑弹窗
+    // 隐藏条目编辑弹窗
     function hideEditModal() {
         document.getElementById('edit-modal').style.display = 'none';
         document.getElementById('overlay').style.display = 'none';
     }
 
-    // 保存编辑/添加的信息
+    // 保存条目信息
     function saveItem() {
         const modal = document.getElementById('edit-modal');
         const itemId = modal.dataset.itemId;
@@ -1006,7 +1000,7 @@
         hideEditModal();
     }
 
-    // 删除信息项
+    // 删除条目信息项
     function deleteItem(itemId) {
         // 创建或获取删除确认弹窗
         let deleteModal = document.getElementById('delete-item-modal');
@@ -1085,7 +1079,7 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    // 保存新分类
+    // 保存分类信息
     function saveCategory() {
         const categoryName = document.getElementById('category-name').value.trim();
         if (categoryName) {
@@ -1295,7 +1289,7 @@
         // 自动聚焦到输入框
         document.getElementById('new-category-name').focus();
     }
-    // 更新项目拖拽排序
+    // 更新条目拖拽排序
     function updateItemOrder(draggedId, targetId) {
         const draggedItem = appData.items.find(item => item.id === draggedId);
         const targetItem = appData.items.find(item => item.id === targetId);
@@ -1448,19 +1442,44 @@
             }
         });
 
+        // 检查点击是否在需要排除的元素内
+        function isClickInExcludedElements(target) {
+            // 定义所有需要排除的元素ID
+            const excludedElementIds = [
+                'edit-modal',               // 编辑弹窗
+                'category-modal',           // 分类弹窗
+                'delete-item-modal',         // 删除信息项弹窗
+                'delete-category-modal',    // 删除分类弹窗
+                'rename-category-modal',     // 重命名分类弹窗
+                'context-menu',             // 信息项右键菜单
+                'category-context-menu',    // 分类右键菜单
+                'overlay',                  // 遮罩层
+                'detail-modal',             // 详情弹窗
+            ];
+            
+            // 遍历所有需要排除的元素ID
+            for (const elementId of excludedElementIds) {
+                const element = document.getElementById(elementId);
+                if (element && element.contains(target)) {
+                    return true;
+                }
+                if (target.closest(`#${elementId}`)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
         // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
         document.addEventListener('click', (e) => {
             const assistant = document.getElementById('personal-info-assistant');
             // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
-            // 同时排除编辑弹窗、分类弹窗、删除分类弹窗、右键菜单和遮罩层
+            // 使用专用函数检查是否需要排除的元素
             if (!assistant.contains(e.target) &&
                 isExpanded &&
                 !appData.isFixed &&
-                !e.target.closest('#edit-modal') &&
-                !e.target.closest('#category-modal') &&
-                !e.target.closest('#delete-category-modal') && // 新增：排除删除分类弹窗
-                !e.target.closest('#context-menu') &&
-                !e.target.closest('#overlay')) {
+                !isClickInExcludedElements(e.target)) {
                 collapseSidebar();
             }
         });
@@ -1701,6 +1720,8 @@
 
         // 分类切换
         document.getElementById('category-container').addEventListener('click', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
             e.stopPropagation(); // 阻止事件冒泡，防止点击分类区域被误判为外部点击
             if (e.target.classList.contains('category-btn')) {
                 const category = e.target.dataset.category;
@@ -1823,15 +1844,17 @@
         document.getElementById('overlay').addEventListener('click', hideContextMenu);
 
         document.getElementById('items-container').addEventListener('contextmenu', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
             if (e.target.closest('.info-item')) {
                 e.preventDefault();
-                e.stopPropagation();
+                // e.stopPropagation();
                 const itemId = e.target.closest('.info-item').dataset.id;
                 showContextMenu(e, itemId);
             }
         });
 
-        // 右键菜单项点击
+        // 条目右键菜单项编辑按钮点击事件绑定
         document.getElementById('edit-item').addEventListener('click', () => {
             const itemId = document.getElementById('context-menu').dataset.itemId;
             if (itemId) {
@@ -1840,20 +1863,36 @@
             }
         });
 
-        // 确保右键菜单在点击其他区域时关闭
-        document.addEventListener('click', (e) => {
-            const contextMenu = document.getElementById('context-menu');
-            if (contextMenu && !contextMenu.contains(e.target)) {
-                hideContextMenu();
-            }
-        });
+        // 确保条目右键菜单在点击其他区域时关闭
+        // document.addEventListener('click', (e) => {
+        //     hideContextMenu();
+        //     const contextMenu = document.getElementById('context-menu');
+        //     if (contextMenu && !contextMenu.contains(e.target)) {
+        //         hideContextMenu();
+        //     }
+        // });
 
         document.getElementById('delete-item').addEventListener('click', () => {
             const itemId = document.getElementById('context-menu').dataset.itemId;
             hideContextMenu();
             deleteItem(itemId);
         });
+        // 编辑弹窗操作
+        document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
+        document.getElementById('save-edit').addEventListener('click', saveItem);
+        document.getElementById('overlay').addEventListener('click', hideEditModal);
 
+        // 分类右键菜单
+        document.getElementById('category-container').addEventListener('contextmenu', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
+            if (e.target.closest('.category-btn')) {
+                e.preventDefault();
+                // e.stopPropagation();
+                const categoryName = e.target.closest('.category-btn').dataset.category;
+                showCategoryContextMenu(e, categoryName);
+            }
+        });
         // 分类右键菜单项点击
         document.getElementById('rename-category').addEventListener('click', () => {
             const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
@@ -1873,19 +1912,18 @@
 
         // 确保分类右键菜单在点击其他区域时关闭
         document.addEventListener('click', (e) => {
-            const categoryContextMenu = document.getElementById('category-context-menu');
-            if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
-                hideCategoryContextMenu();
-            }
+            hideContextMenu();
+            hideCategoryContextMenu();
+            // const categoryContextMenu = document.getElementById('category-context-menu');
+            // if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
+            //     hideCategoryContextMenu();
+            // }
         });
 
         // 点击遮罩层关闭分类右键菜单
         document.getElementById('overlay').addEventListener('click', hideCategoryContextMenu);
 
-        // 编辑弹窗操作
-        document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
-        document.getElementById('save-edit').addEventListener('click', saveItem);
-        document.getElementById('overlay').addEventListener('click', hideEditModal);
+
 
 ///////////////////////////////////////////////// 信息项事件监听器 开始 ///////////////////////////////////////////////////
         // 初始化 items 相关变量
