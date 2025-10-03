@@ -1424,7 +1424,7 @@
         // 标题点击事件 - 根据侧边栏状态切换功能
         titleElement.addEventListener('click', (e) => {
             e.stopPropagation(); // 阻止事件冒泡
-            if (assistantElement.classList.contains('collapsed')) {
+            if (assistantElement.classList.contains('collapsed') && !hasDragged) {
                 expandSidebar(); // 如果已收起，则展开
             } else {
                 collapseSidebar(); // 如果已展开，则收起
