@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version 2.1.5
+// @version 2.1.6
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -103,7 +103,8 @@
             justify-content: center;
             z-index: 1;
         }
-        #personal-info-assistant.collapsed #fix-btn {
+        #personal-info-assistant.collapsed #fix-btn,
+        #personal-info-assistant.collapsed #close-btn {
             display: none;
         }
         #assistant-title {
@@ -116,23 +117,29 @@
             gap: 8px;
         }
         .control-btn {
-            width: 16px;
-            height: 16px;
+            width: 24px;
+            height: 24px;
             border: none;
             background: rgba(255,255,255,0.2);
             color: white;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 12px;
+            font-weight: bold;
             transition: all 0.3s ease;
+            user-select: none;
         }
         .control-btn:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.4);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(255,255,255,0.2);
+            box-shadow: 0 3px 10px rgba(255,255,255,0.3);
+        }
+        .control-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(255,255,255,0.3);
         }
         #assistant-content {
             flex: 1;
@@ -572,6 +579,7 @@
             <div id="assistant-controls">
                 <button class="control-btn" id="toggle-btn" title="${toggleBtnTitle}">${toggleBtnText}</button>
                 <button class="control-btn" id="fix-btn" title="固定">🔒</button>
+                <button class="control-btn" id="close-btn" title="点击关闭侧边栏">×</button>
             </div>
         `;
 
@@ -1409,6 +1417,12 @@
             document.getElementById('fix-btn').title = isFixed ? '固定' : '取消固定';
             appData.isFixed = isFixed;
             saveData();
+        });
+        
+        // 关闭按钮点击事件
+        document.getElementById('close-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            collapseSidebar();
         });
 
         // 分类切换
