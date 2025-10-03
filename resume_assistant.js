@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version 2.1.6
+// @version 2.1.7
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -111,6 +111,7 @@
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
+            user-select: none;
         }
         #assistant-controls {
             display: flex;
@@ -167,6 +168,7 @@
             border-radius: 8px;
             color: #4a4a4a;
             margin-bottom: 4px;
+            user-select: none;
         }
         .category-btn.active {
             background: linear-gradient(135deg, #4CAF50, #45a049);
@@ -212,6 +214,7 @@
             cursor: pointer;
             font-size: 20px;
             color: #666;
+            user-select: none;
         }
         #items-container {
             flex: 1;
@@ -269,6 +272,7 @@
             width: 100%;
             display: block;
             text-align: center;
+            user-select: none;
         }
         .item-date {
             font-size: 11px;
@@ -287,6 +291,7 @@
             margin-bottom: 1px;
             display: inline-block;
             margin-top: -5px;
+            user-select: none;
         }
         .info-item-header {
             display: flex;
@@ -354,6 +359,7 @@
             cursor: pointer;
             font-size: 14px;
             transition: background-color 0.2s ease;
+            user-select: none;
         }
         .context-menu-item:hover {
             background: #f0f0f0;
@@ -379,6 +385,7 @@
             margin-bottom: 20px;
             text-align: center;
             color: #333;
+            user-select: none;
         }
         .form-group {
             margin-bottom: 18px;
@@ -389,6 +396,7 @@
             font-weight: bold;
             font-size: 14px;
             color: #444;
+            user-select: none;
         }
         .form-group input,
         .form-group textarea,
@@ -426,6 +434,7 @@
             font-size: 14px;
             font-weight: 500;
             transition: all 0.3s ease;
+            user-select: none;
         }
         .btn-primary {
             background: linear-gradient(135deg, #4CAF50, #45a049);
