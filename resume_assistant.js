@@ -546,6 +546,24 @@
     // 添加样式
     GM_addStyle(styles);
 
+    // 初始化数据
+    let appData = {
+        isFixed: true,
+        sidebarPosition: 'right', // 默认在右侧
+        collapsedPosition: null, // 最小化状态下的位置信息
+        categories: ['工作', '学习', '生活'],
+        items: [
+            {
+                title: '示例信息',
+                content: '这是一条示例信息，您可以编辑或删除它。',
+                category: '工作',
+                startDate: '2025-10-03',
+                endDate: '2025-10-03',
+                id: generateId(),
+                order: 1
+            }
+        ],
+    };
     // 初始化存储结构
     function initializeStorage() {
         const resetFlag = GM_getValue('personalInfoAssistant_resetStorage', true);
@@ -554,21 +572,7 @@
             GM_setValue('personalInfoAssistant_resetStorage', false);
             
             // 初始化默认数据
-            const defaultData = {
-                categories: ['工作', '学习', '生活'],
-                items: [
-                    {
-                        id: generateId(),
-                        title: '示例信息',
-                        content: '这是一条示例信息，您可以编辑或删除它。',
-                        category: '工作',
-                        order: 1
-                    }
-                ],
-                isFixed: true,
-                sidebarPosition: 'right',
-                collapsedPosition: null
-            };
+            const defaultData = appData
             
             // 使用层级结构存储默认数据
             GM_setValue('personalInfoAssistant_categories', defaultData.categories);
@@ -580,29 +584,6 @@
             console.log('个人信息助手存储结构已初始化');
         }
     }
-
-    // 初始化数据
-    let appData = {
-        categories: ['工作', '学习', '生活'],
-        items: [
-            {
-                id: generateId(),
-                title: '示例信息',
-                content: '这是一条示例信息，您可以编辑或删除它。',
-                category: '工作',
-                order: 1
-            }
-        ],
-        isFixed: true,
-        sidebarPosition: 'right', // 默认在右侧
-        collapsedPosition: null // 最小化状态下的位置信息
-    };
-
-    // 初始化存储结构
-    initializeStorage();
-    
-    // 从存储加载数据
-    loadData();
 
     // 从存储加载数据 - 使用层级结构加载
     function loadData() {
@@ -642,7 +623,16 @@
     function saveData() {
         // 分别存储各个数据部分，使用换行表示层级关系
         GM_setValue('personalInfoAssistant_categories', appData.categories);
-        GM_setValue('personalInfoAssistant_items', appData.items);
+        // 确保存储的items格式与初始化格式一致
+        GM_setValue('personalInfoAssistant_items', appData.items.map(item => ({
+            title: item.title || '',
+            content: item.content || '',
+            category: item.category || '工作',
+            startDate: item.startDate || '',
+            endDate: item.endDate || '',
+            id: item.id || generateId(),
+            order: item.order || 1
+        })));
         GM_setValue('personalInfoAssistant_isFixed', appData.isFixed);
         GM_setValue('personalInfoAssistant_sidebarPosition', appData.sidebarPosition);
         GM_setValue('personalInfoAssistant_collapsedPosition', appData.collapsedPosition);
@@ -652,6 +642,13 @@
     function generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }
+    // 初始化存储结构
+    initializeStorage();
+    
+    // 从存储加载数据
+    loadData();
+    // 保存数据，格式化数据
+    saveData();
 
     // 创建DOM结构
     function createDOM() {
@@ -993,12 +990,12 @@
             // 添加新项目
             const maxOrder = appData.items.length > 0 ? Math.max(...appData.items.map(i => i.order)) : 0;
             appData.items.push({
-                id: generateId(),
                 title,
-                startDate,
-                endDate,
                 content,
                 category,
+                startDate,
+                endDate,
+                id: generateId(),
                 order: maxOrder + 1
             });
         }
