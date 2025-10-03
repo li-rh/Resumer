@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version 2.1.7
+// @version      2.2.0
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -43,11 +43,28 @@
         #personal-info-assistant.collapsed {
             width: 48px;
             height: auto;
-            top: 50%;
+            top: var(--collapsed-top, 45%);
             transform: translateY(-50%);
             border-radius: 16px;
             box-shadow: 0 6px 24px rgba(0,0,0,0.12);
             cursor: pointer;
+            /* 优化拖拽动画性能 */
+            will-change: top;
+            transition: top 0.1s ease-out;
+        }
+        
+        /* 拖拽过程中的流畅动画 */
+        #personal-info-assistant.collapsed.dragging {
+            transition: none; /* 拖拽时禁用过渡动画 */
+            box-shadow: 0 8px 32px rgba(0,0,0,0.16); /* 拖拽时增强阴影 */
+            transform: translateY(-50%) scale(1.02); /* 轻微放大效果 */
+            background: linear-gradient(135deg, #4CAF50, #45a049); /* 拖拽时改变背景色 */
+        }
+        
+        /* 拖拽准备状态（长按计时器期间） */
+        #personal-info-assistant.collapsed.drag-ready {
+            background: linear-gradient(135deg, #FF9800, #F57C00); /* 橙色表示准备拖拽 */
+            box-shadow: 0 6px 24px rgba(255, 152, 0, 0.3);
         }
         #personal-info-assistant.collapsed #assistant-content,
         #personal-info-assistant.collapsed #assistant-footer {
@@ -542,7 +559,8 @@
             }
         ],
         isFixed: true,
-        sidebarPosition: 'right' // 默认在右侧
+        sidebarPosition: 'right', // 默认在右侧
+        collapsedPosition: null // 最小化状态下的位置信息
     };
 
     // 从存储加载数据
@@ -1359,7 +1377,8 @@
             // 只有当侧边栏处于收起状态且点击的不是按钮和标题时才处理
             if (assistantElement.classList.contains('collapsed') &&
                 !e.target.closest('.control-btn') &&
-                e.target.id !== 'assistant-title') {
+                e.target.id !== 'assistant-title' &&
+                !hasDragged) {
                 expandSidebar();
             }
         });
@@ -1418,6 +1437,187 @@
             currentAssistant.classList.add('collapsed');
             isExpanded = false;
         }
+
+        // 最小化状态下的高度拖拽功能
+        let isDragging = false;
+        let dragStartY = 0;
+        let dragStartTop = 0;
+        let longPressTimer = null;
+        let hasDragged = false;
+
+        // 为侧边栏添加拖拽事件监听
+        assistantElement.addEventListener('mousedown', (e) => {
+            // 只在最小化状态下触发拖拽功能
+            if (assistantElement.classList.contains('collapsed')) {
+                // 阻止默认行为，防止文本选择
+                e.preventDefault();
+                
+                // 添加拖拽准备状态样式
+                assistantElement.classList.add('drag-ready');
+                
+                // 设置长按计时器（300ms，更短的响应时间）
+                longPressTimer = setTimeout(() => {
+                    startDrag(e);
+                }, 300);
+                
+                // 标记为未拖拽状态
+                hasDragged = false;
+            }
+        });
+
+        // 鼠标移动事件
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                handleDrag(e);
+            }
+        });
+
+        // 鼠标释放事件
+        document.addEventListener('mouseup', (e) => {
+            // 移除拖拽准备状态样式
+            assistantElement.classList.remove('drag-ready');
+            
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (isDragging) {
+                endDrag(e);
+            }
+        });
+
+        // 开始拖拽
+        function startDrag(e) {
+            isDragging = true;
+            hasDragged = true;
+            dragStartY = e.clientY;
+            // 获取当前侧边栏的位置
+            const computedStyle = window.getComputedStyle(assistantElement);
+            dragStartTop = parseFloat(computedStyle.top) || 0;
+            
+            // 移除拖拽准备状态样式，添加拖拽中样式
+            assistantElement.classList.remove('drag-ready');
+            assistantElement.classList.add('dragging');
+            
+            // 阻止文本选择和默认行为
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'ns-resize';
+        }
+
+        // 处理拖拽 - 优化性能
+        let lastAnimationFrame = null;
+        let lastDragY = 0;
+        let velocity = 0;
+        let lastTime = 0;
+        
+        function handleDrag(e) {
+            if (!isDragging) return;
+            
+            // 使用requestAnimationFrame优化性能
+            if (lastAnimationFrame) {
+                cancelAnimationFrame(lastAnimationFrame);
+            }
+            
+            lastAnimationFrame = requestAnimationFrame(() => {
+                const currentTime = Date.now();
+                const deltaY = e.clientY - dragStartY;
+                const newTop = dragStartTop + deltaY;
+                
+                // 计算速度（用于惯性效果）
+                if (lastTime > 0) {
+                    const deltaTime = currentTime - lastTime;
+                    if (deltaTime > 0) {
+                        velocity = (deltaY - lastDragY) / deltaTime;
+                    }
+                }
+                lastDragY = deltaY;
+                lastTime = currentTime;
+                
+                // 限制拖拽范围在可视区域内，添加弹性效果
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = assistantElement.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                
+                let clampedTop = Math.max(minTop, Math.min(maxTop, newTop));
+                
+                // 添加边界弹性效果
+                if (newTop < minTop) {
+                    const overshoot = minTop - newTop;
+                    clampedTop = minTop - Math.min(overshoot * 0.3, 20);
+                } else if (newTop > maxTop) {
+                    const overshoot = newTop - maxTop;
+                    clampedTop = maxTop + Math.min(overshoot * 0.3, 20);
+                }
+                
+                // 应用新的位置 - 使用CSS变量来存储拖拽位置，这样不会影响展开状态的样式
+                assistantElement.style.setProperty('--collapsed-top', clampedTop + 'px');
+            });
+        }
+
+        // 结束拖拽
+        function endDrag(e) {
+            isDragging = false;
+            
+            // 清除动画帧
+            if (lastAnimationFrame) {
+                cancelAnimationFrame(lastAnimationFrame);
+                lastAnimationFrame = null;
+            }
+            
+            // 移除拖拽样式，添加平滑过渡
+            setTimeout(() => {
+                assistantElement.classList.remove('dragging');
+            }, 10);
+            
+            // 恢复文本选择和光标
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            
+            // 只有在最小化状态下才保存位置到本地存储
+            if (assistantElement.classList.contains('collapsed')) {
+                const currentTop = parseFloat(assistantElement.style.getPropertyValue('--collapsed-top')) || 0;
+                
+                appData.collapsedPosition = {
+                    top: currentTop
+                };
+                saveData();
+            }
+            
+            // 重置速度计算
+            lastDragY = 0;
+            velocity = 0;
+            lastTime = 0;
+        }
+
+        // 恢复保存的位置
+        function restoreCollapsedPosition() {
+            if (appData.collapsedPosition && assistantElement.classList.contains('collapsed')) {
+                const { top } = appData.collapsedPosition;
+                
+                // 验证位置是否在可视区域内
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = assistantElement.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                
+                const validTop = Math.max(minTop, Math.min(maxTop, parseInt(top) || viewportHeight / 2 - sidebarHeight / 2));
+                
+                // 使用CSS变量恢复位置，不修改展开状态的样式
+                assistantElement.style.setProperty('--collapsed-top', validTop + 'px');
+            }
+        }
+
+        // 窗口大小变化时重新计算位置
+        window.addEventListener('resize', () => {
+            if (assistantElement.classList.contains('collapsed')) {
+                restoreCollapsedPosition();
+            }
+        });
+
+        // 初始化时恢复位置
+        restoreCollapsedPosition();
 
         document.getElementById('fix-btn').addEventListener('click', () => {
             assistant.classList.toggle('fixed');
@@ -2162,9 +2362,9 @@
 
         // 初始化侧边栏状态
         // 默认展开 测试专用
-        isExpanded = true;
-        document.getElementById('personal-info-assistant').classList.remove('collapsed');
-        document.getElementById('personal-info-assistant').classList.add('open');
+        // isExpanded = true;
+        // document.getElementById('personal-info-assistant').classList.remove('collapsed');
+        // document.getElementById('personal-info-assistant').classList.add('open');
 
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
