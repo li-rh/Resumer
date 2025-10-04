@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      3.0.0
+// @version      3.0.1
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -1704,8 +1704,8 @@
         restoreCollapsedPosition();
 
         document.getElementById('fix-btn').addEventListener('click', () => {
-            assistant.classList.toggle('fixed');
-            const isFixed = assistant.classList.contains('fixed');
+            assistant.classList.toggle('isFixed');
+            const isFixed = assistant.classList.contains('isFixed');
             document.getElementById('fix-btn').textContent = isFixed ? '🔒' : '🔓';
             document.getElementById('fix-btn').title = isFixed ? '固定' : '取消固定';
             appData.isFixed = isFixed;
@@ -2537,9 +2537,9 @@
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
         if (appData.isFixed) {
-            document.getElementById('personal-info-assistant').classList.add('fixed');
+            document.getElementById('personal-info-assistant').classList.add('isFixed');
         } else {
-            document.getElementById('personal-info-assistant').classList.remove('fixed');
+            document.getElementById('personal-info-assistant').classList.remove('isFixed');
         }
 
         // 初始化fix-btn的状态，确保与appData.isFixed保持一致
