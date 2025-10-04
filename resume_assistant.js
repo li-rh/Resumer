@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      2.2.2
+// @version      3.0.0
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -2289,119 +2289,126 @@
             ensureItemsDraggable();
         };
 /////////////////////////////////////////////////// 增加 renderItems 功能 结束 ///////////////////////////////////////////////////
-        // 使用更接近真实用户操作的方式填充内容
-        function simulateUserInput(element, text) {
-            try {
-                // 聚焦到目标元素
-                element.focus();
+        /**
+         * 给 TinyMCE editor 绑定事件监听器
+         */
+        function bindEditorEvents(editor) {
+            if (!editor || editor._tampermonkeyBound) return; // 避免重复绑定
+            editor._tampermonkeyBound = true;
 
-                // 选中当前内容（如果有的话）
-                if (element.setSelectionRange) {
-                    element.setSelectionRange(0, element.value.length);
-                } else if (element.createTextRange) {
-                    const range = element.createTextRange();
-                    range.select();
+            console.log("[TinyMCE] 绑定事件:", editor.id);
+
+            // // TinyMCE API 层事件
+            // editor.on('click', (e) => {
+            //     console.log(`[TinyMCE API] [${editor.id}] click:`, e);
+            // });
+            // editor.on('keyup', (e) => {
+            //     console.log(`[TinyMCE API] [${editor.id}] keyup:`, e.key);
+            // });
+            // editor.on('change', () => {
+            //     console.log(`[TinyMCE API] [${editor.id}] content changed:`, editor.getContent());
+            // });
+
+            // 监听 iframe 内部 DOM
+            editor.on('init', () => {
+                const iframe = editor.iframeElement;
+                if (iframe && iframe.contentDocument) {
+                    const doc = iframe.contentDocument;
+
+                    doc.addEventListener('click', (e) => {
+                        editor.setContent(lastClickedItemContent);
+                        // simulateInputAtCursor(lastClickedItemContent);
+                        console.log(`[TinyMCE DOM] [${editor.id}] Clicked:`, e.target);
+                    });
+
+                    // doc.addEventListener('input', (e) => {
+                    //     console.log(`[TinyMCE DOM] [${editor.id}] Input:`, e.target.textContent);
+                    // });
+
+                    console.log(`[TinyMCE] DOM 监听已挂载 -> ${editor.id}`);
                 }
+            });
+        }
 
-                // 尝试使用document.execCommand('insertText')方法，这更接近真实用户输入
-                try {
-                    // 插入新文本，这会替换选中的内容
-                    if (document.execCommand('insertText', false, text)) {
-                        console.log('[AutoFill Debug] 使用document.execCommand成功填充内容');
-                    } else {
-                        throw new Error('document.execCommand failed');
+        /**
+         * 检查并绑定所有已存在的 TinyMCE 实例
+         * @returns {boolean} 是否绑定到了新的 editor
+         */
+        function checkEditorsAndReturnBound() {
+            let bound = false;
+            if (unsafeWindow.tinymce && unsafeWindow.tinymce.editors && unsafeWindow.tinymce.editors.length > 0) {
+                unsafeWindow.tinymce.editors.forEach(editor => {
+                    if (editor && !editor.destroyed && !editor._tampermonkeyBound) {
+                        bindEditorEvents(editor);
+                        bound = true; // ✅ 标记有新的 editor 被绑定
                     }
-                } catch (execError) {
-                    console.warn('[AutoFill Debug] document.execCommand失败，尝试备用方法:', execError);
-
-                    // 备用方法1: 使用Clipboard API
-                    if (navigator.clipboard && window.isSecureContext) {
-                        console.log('[AutoFill Debug] 尝试使用Clipboard API');
-                        navigator.clipboard.writeText(text).then(() => {
-                            // 模拟Ctrl+V粘贴操作
-                            const pasteEvent = new KeyboardEvent('keydown', {
-                                bubbles: true,
-                                cancelable: true,
-                                key: 'v',
-                                ctrlKey: true
-                            });
-                            element.dispatchEvent(pasteEvent);
-                        }).catch(clipboardError => {
-                            console.error('[AutoFill Error] Clipboard API失败:', clipboardError);
-                            // 最终备用方案: 直接设置值
-                            element.value = text;
-                            triggerInputEvents(element);
-                        });
-                    } else {
-                        // 最终备用方案: 直接设置值
-                        element.value = text;
-                        triggerInputEvents(element);
-                    }
-                }
-            } catch (error) {
-                console.error('[AutoFill Error] 填充内容失败:', error);
-                // 最后的兜底方案
-                try {
-                    element.value = text;
-                    triggerInputEvents(element);
-                } catch (fallbackError) {
-                    console.error('[AutoFill Error] 兜底方案也失败:', fallbackError);
-                }
+                });
             }
+            console.log('bound:', bound);
+            return bound;
         }
 
-        // 触发输入事件的辅助函数
-        function triggerInputEvents(element) {
-            // 创建并触发input事件，使用compositionend标记为真实用户输入
-            const inputEvent = new Event('input', {
-                bubbles: true,
-                cancelable: true
-            });
-            inputEvent.isTrusted = true; // 虽然现代浏览器会忽略这个设置，但还是尝试设置
-            element.dispatchEvent(inputEvent);
-
-            // 触发compositionstart和compositionend事件，模拟IME输入完成
-            const compStartEvent = new Event('compositionstart', { bubbles: true });
-            element.dispatchEvent(compStartEvent);
-
-            const compEndEvent = new Event('compositionend', { bubbles: true });
-            compEndEvent.data = element.value; // 设置完成的文本
-            element.dispatchEvent(compEndEvent);
-
-            // 触发change事件
-            const changeEvent = new Event('change', {
-                bubbles: true,
-                cancelable: true
-            });
-            element.dispatchEvent(changeEvent);
+        /**
+         * 当 DOM 变化时，启动短期轮询，最多 2 秒，每 200ms 检查一次
+         * 一旦发现并绑定成功，就立即退出
+         */
+        function startShortPolling() {
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                if (checkEditorsAndReturnBound()) {  // ✅ 如果发现新 editor 并绑定，就退出
+                    clearInterval(interval);
+                    return;
+                }
+                elapsed += 200;
+                if (elapsed >= 2000) { // 最多 2s
+                    clearInterval(interval);
+                }
+            }, 200);
         }
+
+        /**
+         * 使用 MutationObserver 监听 DOM 变化
+         */
+        function observeForEditors() {
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length > 0) {
+                        // 当有新节点加入时，触发一次短期轮询
+                        startShortPolling();
+                        break;
+                    }
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
+        /**
+         * 主入口
+         */
+        function tinyMCEInit() {
+            // 先检查一次已有实例
+            checkEditorsAndReturnBound();
+            // 开启 DOM 监听
+            observeForEditors();
+            console.log("[TinyMCE] 事件监听初始化完成 (Observer + 短轮询).");
+        }
+
+        tinyMCEInit();
 
         // 添加全局输入框点击监听，用于自动填充内容
-        document.addEventListener('click', (e) => {
-            // 检查点击的元素是否为可输入元素并且有最近点击的项目内容
-            let targetElement = null;
+        document.addEventListener('mouseup', (e) => {
             console.log('[AutoFill Debug] 点击事件触发');
-            // 1. 检查直接点击的元素是否为可输入元素
-            // 只检测直接点击的可输入元素
-            if (isInputElement(e.target)) {
-                targetElement = e.target;
-                console.log('[AutoFill Debug] targetElemnet:', targetElement);
-            }
 
             // 执行自动填充
-            if (targetElement && lastClickedItemContent) {
-                console.log('[AutoFill Debug] 检测到可输入元素被选中，执行自动填充');
-
-                // 聚焦到目标元素
-                try {
-                    targetElement.focus();
-                } catch (err) {
-                    console.log('[AutoFill Debug] 无法聚焦到元素:', err);
-                }
+            if (lastClickedItemContent) {
+                console.log('[AutoFill Debug] 执行自动填充');
 
                 // 使用模拟用户输入的方式填充内容
-                simulateUserInput(targetElement, lastClickedItemContent);
-
+                simulateInputAtCursor(lastClickedItemContent);
                 // 清除缓存的内容，避免重复填充
                 lastClickedItemContent = null;
                 if (autoFillTimeout) {
@@ -2411,35 +2418,93 @@
             }
         });
 
-        // 判断元素是否为可输入元素的通用函数
-        function isInputElement(element) {
-            // 检查常见的表单输入元素
-            if ((element.tagName === 'INPUT' &&
-                (element.type === 'text' || element.type === 'email' ||
-                    element.type === 'password' || element.type === 'search' ||
-                    element.type === 'tel' || element.type === 'url' ||
-                    element.type === 'number' || element.type === 'date' ||
-                    element.type === 'datetime-local')) ||
-                element.tagName === 'TEXTAREA' ||
-                element.tagName === 'SELECT' ||
-                // 检查是否为contenteditable元素
-                element.hasAttribute('contenteditable')) {
-                // 确保元素是可见且可编辑的
-                return isElementVisible(element) &&
-                    !element.disabled &&
-                    !element.readOnly;
-            }
-            return false;
-        }
+        // 模拟执行粘贴，尝试所有的可能方式，每0.3秒钟检查一次是否有可输入的焦点元素，持续3s
+        function simulateInputAtCursor(message) {
+            const maxWaitTime = 3000; // 最大等待时间（毫秒）
+            const checkInterval = 300; // 检查间隔（毫秒）
 
-        // 检查元素是否可见
-        function isElementVisible(element) {
-            const style = window.getComputedStyle(element);
-            return (style.display !== 'none' &&
-                style.visibility !== 'hidden' &&
-                style.opacity !== '0' &&
-                element.offsetWidth > 0 &&
-                element.offsetHeight > 0);
+            let attempts = 0;
+            const interval = setInterval(() => {
+                const activeElement = document.activeElement;
+
+                if (activeElement && (
+                    activeElement instanceof HTMLInputElement ||
+                    activeElement instanceof HTMLTextAreaElement ||
+                    (activeElement.isContentEditable && activeElement.contentEditable === 'true')
+                )) {
+                    clearInterval(interval);
+                    activeElement.focus();
+
+                    // 方式一：尝试使用 document.execCommand 插入文本
+                    if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+                        try {
+                            document.execCommand('insertText', false, message);
+                            console.log('粘贴成功（方式一：execCommand）');
+                            return;
+                        } catch (e) {
+                            console.warn('方式一失败，尝试其他方法');
+                        }
+                    }
+                    
+
+                    // 方式二：现代API setRangeText（仅限 input/textarea）
+                    if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+                        if (typeof activeElement.setRangeText === 'function') {
+                            try {
+                                activeElement.setRangeText(
+                                    message,
+                                    activeElement.selectionStart,
+                                    activeElement.selectionEnd,
+                                    'end'
+                                );
+                                console.log('粘贴成功（方式二：setRangeText）');
+                                return;
+                            } catch (e) {
+                                console.warn('方式二失败');
+                            }
+                        }
+                    }
+
+                    // 方式三：contenteditable 的 Selection + Range API
+                    if (activeElement.isContentEditable) {
+                        try {
+                            const sel = window.getSelection();
+                            if (sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                range.insertNode(document.createTextNode(message));
+                                range.collapse(false);
+                                console.log('粘贴成功（方式三：Range API）');
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('方式三失败');
+                        }
+                    }
+                    // 备用方法1: 使用Clipboard API
+                    const clipboardData = new DataTransfer();
+                    clipboardData.setData('text/plain', message);
+
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        bubbles: true,
+                        cancelable: true,
+                        clipboardData
+                    });
+
+                    activeElement.dispatchEvent(pasteEvent);
+                    console.log("尝试模拟触发粘贴事件，但不知道是否成功。。。，建议直接用Ctrl+单击复制内容，然后手动粘贴");
+                    return;
+
+                } else {
+                    // 如果还没有超过最大等待时间，继续检查
+                    attempts++;
+                    if (attempts * checkInterval >= maxWaitTime) {
+                        // 超过最大等待时间，停止查找并打印错误信息
+                        clearInterval(interval);
+                        console.error('在3秒内未找到可输入的焦点元素，放弃执行粘贴动作。');
+                    }
+                }
+            }, checkInterval);
         }
 
         // 快捷键
