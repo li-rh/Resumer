@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version      3.0.1
+// @version      3.0.2
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -246,7 +246,14 @@
             margin-bottom: 12px;
             cursor: pointer;
             position: relative;
+            /* 全面禁止文本选择的CSS属性 */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
             user-select: none;
+            /* 禁用拖动选择和长按菜单 */
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
             transition: all 0.3s ease;
             transform: translateY(0);
             overflow: hidden;
@@ -2072,6 +2079,14 @@
             const contextMenu = document.getElementById('context-menu');
             if (contextMenu && contextMenu.style.display === 'block') {
                 return;
+            }
+
+            // 当按下Shift键时，完全阻止浏览器默认的文本选择行为
+            if (event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                // 确保不会触发文本选择
+                window.getSelection().removeAllRanges();
             }
 
             const itemId = this.dataset.id;
