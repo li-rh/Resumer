@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         个人信息助手
 // @namespace    http://tampermonkey.net/
-// @version 2.1.5
+// @version      3.0.2
 // @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
 // @author       You
 // @match        *://*/*
@@ -43,11 +43,28 @@
         #personal-info-assistant.collapsed {
             width: 48px;
             height: auto;
-            top: 50%;
+            top: var(--collapsed-top, 45%);
             transform: translateY(-50%);
             border-radius: 16px;
             box-shadow: 0 6px 24px rgba(0,0,0,0.12);
             cursor: pointer;
+            /* 优化拖拽动画性能 */
+            will-change: top;
+            transition: top 0.1s ease-out;
+        }
+        
+        /* 拖拽过程中的流畅动画 */
+        #personal-info-assistant.collapsed.dragging {
+            transition: none; /* 拖拽时禁用过渡动画 */
+            box-shadow: 0 8px 32px rgba(0,0,0,0.16); /* 拖拽时增强阴影 */
+            transform: translateY(-50%) scale(1.02); /* 轻微放大效果 */
+            background: linear-gradient(135deg, #4CAF50, #45a049); /* 拖拽时改变背景色 */
+        }
+        
+        /* 拖拽准备状态（长按计时器期间） */
+        #personal-info-assistant.collapsed.drag-ready {
+            background: linear-gradient(135deg, #FF9800, #F57C00); /* 橙色表示准备拖拽 */
+            box-shadow: 0 6px 24px rgba(255, 152, 0, 0.3);
         }
         #personal-info-assistant.collapsed #assistant-content,
         #personal-info-assistant.collapsed #assistant-footer {
@@ -103,36 +120,44 @@
             justify-content: center;
             z-index: 1;
         }
-        #personal-info-assistant.collapsed #fix-btn {
+        #personal-info-assistant.collapsed #fix-btn,
+        #personal-info-assistant.collapsed #close-btn {
             display: none;
         }
         #assistant-title {
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
+            user-select: none;
         }
         #assistant-controls {
             display: flex;
             gap: 8px;
         }
         .control-btn {
-            width: 16px;
-            height: 16px;
+            width: 24px;
+            height: 24px;
             border: none;
             background: rgba(255,255,255,0.2);
             color: white;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 12px;
+            font-weight: bold;
             transition: all 0.3s ease;
+            user-select: none;
         }
         .control-btn:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.4);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(255,255,255,0.2);
+            box-shadow: 0 3px 10px rgba(255,255,255,0.3);
+        }
+        .control-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(255,255,255,0.3);
         }
         #assistant-content {
             flex: 1;
@@ -160,6 +185,7 @@
             border-radius: 8px;
             color: #4a4a4a;
             margin-bottom: 4px;
+            user-select: none;
         }
         .category-btn.active {
             background: linear-gradient(135deg, #4CAF50, #45a049);
@@ -205,6 +231,7 @@
             cursor: pointer;
             font-size: 20px;
             color: #666;
+            user-select: none;
         }
         #items-container {
             flex: 1;
@@ -219,7 +246,14 @@
             margin-bottom: 12px;
             cursor: pointer;
             position: relative;
+            /* 全面禁止文本选择的CSS属性 */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
             user-select: none;
+            /* 禁用拖动选择和长按菜单 */
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
             transition: all 0.3s ease;
             transform: translateY(0);
             overflow: hidden;
@@ -262,6 +296,7 @@
             width: 100%;
             display: block;
             text-align: center;
+            user-select: none;
         }
         .item-date {
             font-size: 11px;
@@ -280,6 +315,7 @@
             margin-bottom: 1px;
             display: inline-block;
             margin-top: -5px;
+            user-select: none;
         }
         .info-item-header {
             display: flex;
@@ -331,7 +367,7 @@
             transform: translateY(0);
             box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
         }
-        #context-menu {
+        .context-menu {
             position: fixed;
             background: white;
             border: 1px solid #ddd;
@@ -347,6 +383,7 @@
             cursor: pointer;
             font-size: 14px;
             transition: background-color 0.2s ease;
+            user-select: none;
         }
         .context-menu-item:hover {
             background: #f0f0f0;
@@ -372,6 +409,7 @@
             margin-bottom: 20px;
             text-align: center;
             color: #333;
+            user-select: none;
         }
         .form-group {
             margin-bottom: 18px;
@@ -382,6 +420,7 @@
             font-weight: bold;
             font-size: 14px;
             color: #444;
+            user-select: none;
         }
         .form-group input,
         .form-group textarea,
@@ -419,6 +458,7 @@
             font-size: 14px;
             font-weight: 500;
             transition: all 0.3s ease;
+            user-select: none;
         }
         .btn-primary {
             background: linear-gradient(135deg, #4CAF50, #45a049);
@@ -515,41 +555,107 @@
 
     // 初始化数据
     let appData = {
+        isFixed: true,
+        sidebarPosition: 'right', // 默认在右侧
+        collapsedPosition: null, // 最小化状态下的位置信息
         categories: ['工作', '学习', '生活'],
         items: [
             {
-                id: generateId(),
                 title: '示例信息',
                 content: '这是一条示例信息，您可以编辑或删除它。',
                 category: '工作',
+                startDate: '2025-10-03',
+                endDate: '2025-10-03',
+                id: generateId(),
                 order: 1
             }
         ],
-        isFixed: true,
-        sidebarPosition: 'right' // 默认在右侧
     };
-
-    // 从存储加载数据
-    function loadData() {
-        const savedData = GM_getValue('personalInfoAssistantData');
-        if (savedData) {
-            try {
-                appData = JSON.parse(savedData);
-            } catch (e) {
-                console.error('Failed to parse saved data:', e);
-            }
+    // 初始化存储结构
+    function initializeStorage() {
+        const resetFlag = GM_getValue('personalInfoAssistant_resetStorage', true);
+        if (resetFlag) {
+            // 只在安装脚本时默认执行一次
+            GM_setValue('personalInfoAssistant_resetStorage', false);
+            
+            // 初始化默认数据
+            const defaultData = appData
+            
+            // 使用层级结构存储默认数据
+            GM_setValue('personalInfoAssistant_categories', defaultData.categories);
+            GM_setValue('personalInfoAssistant_items', defaultData.items);
+            GM_setValue('personalInfoAssistant_isFixed', defaultData.isFixed);
+            GM_setValue('personalInfoAssistant_sidebarPosition', defaultData.sidebarPosition);
+            GM_setValue('personalInfoAssistant_collapsedPosition', defaultData.collapsedPosition);
+            
+            console.log('个人信息助手存储结构已初始化');
         }
     }
 
-    // 保存数据到存储
+    // 从存储加载数据 - 使用层级结构加载
+    function loadData() {
+        // 分别加载各个数据部分，支持向后兼容
+        const savedCategories = GM_getValue('personalInfoAssistant_categories', null);
+        const savedItems = GM_getValue('personalInfoAssistant_items', null);
+        const savedIsFixed = GM_getValue('personalInfoAssistant_isFixed', null);
+        const savedSidebarPosition = GM_getValue('personalInfoAssistant_sidebarPosition', null);
+        const savedCollapsedPosition = GM_getValue('personalInfoAssistant_collapsedPosition', null);
+        
+        // 检查是否存在旧格式的数据（向后兼容）
+        const oldFormatData = GM_getValue('personalInfoAssistantData', null);
+        if (oldFormatData) {
+            try {
+                appData = JSON.parse(oldFormatData);
+                // 迁移数据到新格式
+                saveData();
+                // 删除旧格式数据
+                GM_setValue('personalInfoAssistantData', null);
+                console.error('数据已从旧格式迁移到新格式');
+                return;
+            } catch (e) {
+                console.error('Failed to parse old format data:', e);
+            }
+        }
+        console.error('未加载到旧数据，使用新数据格式');
+        
+        // 使用新格式数据
+        if (savedCategories) appData.categories = savedCategories;
+        if (savedItems) appData.items = savedItems;
+        if (savedIsFixed !== undefined) appData.isFixed = savedIsFixed;
+        if (savedSidebarPosition) appData.sidebarPosition = savedSidebarPosition;
+        if (savedCollapsedPosition !== undefined) appData.collapsedPosition = savedCollapsedPosition;
+    }
+
+    // 保存数据到存储 - 使用层级结构存储
     function saveData() {
-        GM_setValue('personalInfoAssistantData', JSON.stringify(appData));
+        // 分别存储各个数据部分，使用换行表示层级关系
+        GM_setValue('personalInfoAssistant_categories', appData.categories);
+        // 确保存储的items格式与初始化格式一致
+        GM_setValue('personalInfoAssistant_items', appData.items.map(item => ({
+            title: item.title || '',
+            content: item.content || '',
+            category: item.category || '工作',
+            startDate: item.startDate || '',
+            endDate: item.endDate || '',
+            id: item.id || generateId(),
+            order: item.order || 1
+        })));
+        GM_setValue('personalInfoAssistant_isFixed', appData.isFixed);
+        GM_setValue('personalInfoAssistant_sidebarPosition', appData.sidebarPosition);
+        GM_setValue('personalInfoAssistant_collapsedPosition', appData.collapsedPosition);
     }
 
     // 生成唯一ID
     function generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }
+    // 初始化存储结构
+    initializeStorage();
+    
+    // 从存储加载数据
+    loadData();
+    // 保存数据，格式化数据
+    saveData();
 
     // 创建DOM结构
     function createDOM() {
@@ -572,6 +678,7 @@
             <div id="assistant-controls">
                 <button class="control-btn" id="toggle-btn" title="${toggleBtnTitle}">${toggleBtnText}</button>
                 <button class="control-btn" id="fix-btn" title="固定">🔒</button>
+                <button class="control-btn" id="close-btn" title="点击关闭侧边栏">×</button>
             </div>
         `;
 
@@ -604,6 +711,7 @@
 
         // 创建右键菜单
         const contextMenu = document.createElement('div');
+        contextMenu.classList.add('context-menu');
         contextMenu.id = 'context-menu';
         contextMenu.innerHTML = `
             <div class="context-menu-item" id="edit-item">编辑</div>
@@ -612,14 +720,12 @@
 
         // 创建分类右键菜单
         const categoryContextMenu = document.createElement('div');
+        categoryContextMenu.classList.add('context-menu');
         categoryContextMenu.id = 'category-context-menu';
         categoryContextMenu.innerHTML = `
             <div class="context-menu-item" id="rename-category">重命名</div>
             <div class="context-menu-item" id="delete-category-menu">删除</div>
         `;
-        // 复制条目右键菜单的样式
-        categoryContextMenu.style.cssText = 'position: fixed; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 8px 0; display: none; z-index: 10000; min-width: 120px;';
-
 
         // 创建编辑弹窗
         const editModal = document.createElement('div');
@@ -714,11 +820,6 @@
             btn.dataset.category = category;
             // 设置分类按钮可拖拽
             btn.draggable = true;
-            // 为分类按钮绑定右键菜单事件
-            btn.addEventListener('contextmenu', function (e) {
-                e.preventDefault();
-                showCategoryContextMenu(e, category);
-            });
             container.appendChild(btn);
         });
         // 添加分类按钮
@@ -767,7 +868,7 @@
         });
     }
 
-    // 显示右键菜单
+    // 显示条目右键菜单
     function showContextMenu(event, itemId) {
         const contextMenu = document.getElementById('context-menu');
         contextMenu.style.left = `${event.clientX}px`;
@@ -778,7 +879,7 @@
         contextMenu.dataset.itemId = itemId;
     }
 
-    // 隐藏右键菜单
+    // 隐藏条目右键菜单
     function hideContextMenu() {
         document.getElementById('context-menu').style.display = 'none';
     }
@@ -798,7 +899,7 @@
         document.getElementById('category-context-menu').style.display = 'none';
     }
 
-    // 显示编辑弹窗
+    // 显示条目编辑弹窗
     function showEditModal(itemId = null) {
         const modal = document.getElementById('edit-modal');
         const overlay = document.getElementById('overlay');
@@ -852,13 +953,13 @@
         document.getElementById('edit-title').focus();
     }
 
-    // 隐藏编辑弹窗
+    // 隐藏条目编辑弹窗
     function hideEditModal() {
         document.getElementById('edit-modal').style.display = 'none';
         document.getElementById('overlay').style.display = 'none';
     }
 
-    // 保存编辑/添加的信息
+    // 保存条目信息
     function saveItem() {
         const modal = document.getElementById('edit-modal');
         const itemId = modal.dataset.itemId;
@@ -890,12 +991,12 @@
             // 添加新项目
             const maxOrder = appData.items.length > 0 ? Math.max(...appData.items.map(i => i.order)) : 0;
             appData.items.push({
-                id: generateId(),
                 title,
-                startDate,
-                endDate,
                 content,
                 category,
+                startDate,
+                endDate,
+                id: generateId(),
                 order: maxOrder + 1
             });
         }
@@ -906,7 +1007,7 @@
         hideEditModal();
     }
 
-    // 删除信息项
+    // 删除条目信息项
     function deleteItem(itemId) {
         // 创建或获取删除确认弹窗
         let deleteModal = document.getElementById('delete-item-modal');
@@ -985,7 +1086,7 @@
         document.getElementById('overlay').style.display = 'none';
     }
 
-    // 保存新分类
+    // 保存分类信息
     function saveCategory() {
         const categoryName = document.getElementById('category-name').value.trim();
         if (categoryName) {
@@ -1195,7 +1296,7 @@
         // 自动聚焦到输入框
         document.getElementById('new-category-name').focus();
     }
-    // 更新项目拖拽排序
+    // 更新条目拖拽排序
     function updateItemOrder(draggedId, targetId) {
         const draggedItem = appData.items.find(item => item.id === draggedId);
         const targetItem = appData.items.find(item => item.id === targetId);
@@ -1330,7 +1431,7 @@
         // 标题点击事件 - 根据侧边栏状态切换功能
         titleElement.addEventListener('click', (e) => {
             e.stopPropagation(); // 阻止事件冒泡
-            if (assistantElement.classList.contains('collapsed')) {
+            if (assistantElement.classList.contains('collapsed') && !hasDragged) {
                 expandSidebar(); // 如果已收起，则展开
             } else {
                 collapseSidebar(); // 如果已展开，则收起
@@ -1342,24 +1443,50 @@
             // 只有当侧边栏处于收起状态且点击的不是按钮和标题时才处理
             if (assistantElement.classList.contains('collapsed') &&
                 !e.target.closest('.control-btn') &&
-                e.target.id !== 'assistant-title') {
+                e.target.id !== 'assistant-title' &&
+                !hasDragged) {
                 expandSidebar();
             }
         });
+
+        // 检查点击是否在需要排除的元素内
+        function isClickInExcludedElements(target) {
+            // 定义所有需要排除的元素ID
+            const excludedElementIds = [
+                'edit-modal',               // 编辑弹窗
+                'category-modal',           // 分类弹窗
+                'delete-item-modal',         // 删除信息项弹窗
+                'delete-category-modal',    // 删除分类弹窗
+                'rename-category-modal',     // 重命名分类弹窗
+                'context-menu',             // 信息项右键菜单
+                'category-context-menu',    // 分类右键菜单
+                'overlay',                  // 遮罩层
+                'detail-modal',             // 详情弹窗
+            ];
+            
+            // 遍历所有需要排除的元素ID
+            for (const elementId of excludedElementIds) {
+                const element = document.getElementById(elementId);
+                if (element && element.contains(target)) {
+                    return true;
+                }
+                if (target.closest(`#${elementId}`)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
 
         // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
         document.addEventListener('click', (e) => {
             const assistant = document.getElementById('personal-info-assistant');
             // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
-            // 同时排除编辑弹窗、分类弹窗、删除分类弹窗、右键菜单和遮罩层
+            // 使用专用函数检查是否需要排除的元素
             if (!assistant.contains(e.target) &&
                 isExpanded &&
                 !appData.isFixed &&
-                !e.target.closest('#edit-modal') &&
-                !e.target.closest('#category-modal') &&
-                !e.target.closest('#delete-category-modal') && // 新增：排除删除分类弹窗
-                !e.target.closest('#context-menu') &&
-                !e.target.closest('#overlay')) {
+                !isClickInExcludedElements(e.target)) {
                 collapseSidebar();
             }
         });
@@ -1402,17 +1529,206 @@
             isExpanded = false;
         }
 
+        // 最小化状态下的高度拖拽功能
+        let isDragging = false;
+        let dragStartY = 0;
+        let dragStartTop = 0;
+        let longPressTimer = null;
+        let hasDragged = false;
+
+        // 为侧边栏添加拖拽事件监听
+        assistantElement.addEventListener('mousedown', (e) => {
+            // 只在最小化状态下触发拖拽功能
+            if (assistantElement.classList.contains('collapsed')) {
+                // 阻止默认行为，防止文本选择
+                e.preventDefault();
+                
+                // 添加拖拽准备状态样式
+                assistantElement.classList.add('drag-ready');
+                
+                // 设置长按计时器（300ms，更短的响应时间）
+                longPressTimer = setTimeout(() => {
+                    startDrag(e);
+                }, 300);
+                
+                // 标记为未拖拽状态
+                hasDragged = false;
+            }
+        });
+
+        // 鼠标移动事件
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                handleDrag(e);
+            }
+        });
+
+        // 鼠标释放事件
+        document.addEventListener('mouseup', (e) => {
+            // 移除拖拽准备状态样式
+            assistantElement.classList.remove('drag-ready');
+            
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (isDragging) {
+                endDrag(e);
+            }
+        });
+
+        // 开始拖拽
+        function startDrag(e) {
+            isDragging = true;
+            hasDragged = true;
+            dragStartY = e.clientY;
+            // 获取当前侧边栏的位置
+            const computedStyle = window.getComputedStyle(assistantElement);
+            dragStartTop = parseFloat(computedStyle.top) || 0;
+            
+            // 移除拖拽准备状态样式，添加拖拽中样式
+            assistantElement.classList.remove('drag-ready');
+            assistantElement.classList.add('dragging');
+            
+            // 阻止文本选择和默认行为
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'ns-resize';
+        }
+
+        // 处理拖拽 - 优化性能
+        let lastAnimationFrame = null;
+        let lastDragY = 0;
+        let velocity = 0;
+        let lastTime = 0;
+        
+        function handleDrag(e) {
+            if (!isDragging) return;
+            
+            // 使用requestAnimationFrame优化性能
+            if (lastAnimationFrame) {
+                cancelAnimationFrame(lastAnimationFrame);
+            }
+            
+            lastAnimationFrame = requestAnimationFrame(() => {
+                const currentTime = Date.now();
+                const deltaY = e.clientY - dragStartY;
+                const newTop = dragStartTop + deltaY;
+                
+                // 计算速度（用于惯性效果）
+                if (lastTime > 0) {
+                    const deltaTime = currentTime - lastTime;
+                    if (deltaTime > 0) {
+                        velocity = (deltaY - lastDragY) / deltaTime;
+                    }
+                }
+                lastDragY = deltaY;
+                lastTime = currentTime;
+                
+                // 限制拖拽范围在可视区域内，添加弹性效果
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = assistantElement.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                
+                let clampedTop = Math.max(minTop, Math.min(maxTop, newTop));
+                
+                // 添加边界弹性效果
+                if (newTop < minTop) {
+                    const overshoot = minTop - newTop;
+                    clampedTop = minTop - Math.min(overshoot * 0.3, 20);
+                } else if (newTop > maxTop) {
+                    const overshoot = newTop - maxTop;
+                    clampedTop = maxTop + Math.min(overshoot * 0.3, 20);
+                }
+                
+                // 应用新的位置 - 使用CSS变量来存储拖拽位置，这样不会影响展开状态的样式
+                assistantElement.style.setProperty('--collapsed-top', clampedTop + 'px');
+            });
+        }
+
+        // 结束拖拽
+        function endDrag(e) {
+            isDragging = false;
+            
+            // 清除动画帧
+            if (lastAnimationFrame) {
+                cancelAnimationFrame(lastAnimationFrame);
+                lastAnimationFrame = null;
+            }
+            
+            // 移除拖拽样式，添加平滑过渡
+            setTimeout(() => {
+                assistantElement.classList.remove('dragging');
+            }, 10);
+            
+            // 恢复文本选择和光标
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            
+            // 只有在最小化状态下才保存位置到本地存储
+            if (assistantElement.classList.contains('collapsed')) {
+                const currentTop = parseFloat(assistantElement.style.getPropertyValue('--collapsed-top')) || 0;
+                
+                appData.collapsedPosition = {
+                    top: currentTop
+                };
+                saveData();
+            }
+            
+            // 重置速度计算
+            lastDragY = 0;
+            velocity = 0;
+            lastTime = 0;
+        }
+
+        // 恢复保存的位置
+        function restoreCollapsedPosition() {
+            if (appData.collapsedPosition && assistantElement.classList.contains('collapsed')) {
+                const { top } = appData.collapsedPosition;
+                
+                // 验证位置是否在可视区域内
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = assistantElement.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                
+                const validTop = Math.max(minTop, Math.min(maxTop, parseInt(top) || viewportHeight / 2 - sidebarHeight / 2));
+                
+                // 使用CSS变量恢复位置，不修改展开状态的样式
+                assistantElement.style.setProperty('--collapsed-top', validTop + 'px');
+            }
+        }
+
+        // 窗口大小变化时重新计算位置
+        window.addEventListener('resize', () => {
+            if (assistantElement.classList.contains('collapsed')) {
+                restoreCollapsedPosition();
+            }
+        });
+
+        // 初始化时恢复位置
+        restoreCollapsedPosition();
+
         document.getElementById('fix-btn').addEventListener('click', () => {
-            assistant.classList.toggle('fixed');
-            const isFixed = assistant.classList.contains('fixed');
+            assistant.classList.toggle('isFixed');
+            const isFixed = assistant.classList.contains('isFixed');
             document.getElementById('fix-btn').textContent = isFixed ? '🔒' : '🔓';
             document.getElementById('fix-btn').title = isFixed ? '固定' : '取消固定';
             appData.isFixed = isFixed;
             saveData();
         });
+        
+        // 关闭按钮点击事件
+        document.getElementById('close-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            collapseSidebar();
+        });
 
         // 分类切换
         document.getElementById('category-container').addEventListener('click', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
             e.stopPropagation(); // 阻止事件冒泡，防止点击分类区域被误判为外部点击
             if (e.target.classList.contains('category-btn')) {
                 const category = e.target.dataset.category;
@@ -1535,15 +1851,17 @@
         document.getElementById('overlay').addEventListener('click', hideContextMenu);
 
         document.getElementById('items-container').addEventListener('contextmenu', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
             if (e.target.closest('.info-item')) {
                 e.preventDefault();
-                e.stopPropagation();
+                // e.stopPropagation();
                 const itemId = e.target.closest('.info-item').dataset.id;
                 showContextMenu(e, itemId);
             }
         });
 
-        // 右键菜单项点击
+        // 条目右键菜单项编辑按钮点击事件绑定
         document.getElementById('edit-item').addEventListener('click', () => {
             const itemId = document.getElementById('context-menu').dataset.itemId;
             if (itemId) {
@@ -1552,20 +1870,36 @@
             }
         });
 
-        // 确保右键菜单在点击其他区域时关闭
-        document.addEventListener('click', (e) => {
-            const contextMenu = document.getElementById('context-menu');
-            if (contextMenu && !contextMenu.contains(e.target)) {
-                hideContextMenu();
-            }
-        });
+        // 确保条目右键菜单在点击其他区域时关闭
+        // document.addEventListener('click', (e) => {
+        //     hideContextMenu();
+        //     const contextMenu = document.getElementById('context-menu');
+        //     if (contextMenu && !contextMenu.contains(e.target)) {
+        //         hideContextMenu();
+        //     }
+        // });
 
         document.getElementById('delete-item').addEventListener('click', () => {
             const itemId = document.getElementById('context-menu').dataset.itemId;
             hideContextMenu();
             deleteItem(itemId);
         });
+        // 编辑弹窗操作
+        document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
+        document.getElementById('save-edit').addEventListener('click', saveItem);
+        document.getElementById('overlay').addEventListener('click', hideEditModal);
 
+        // 分类右键菜单
+        document.getElementById('category-container').addEventListener('contextmenu', (e) => {
+            hideContextMenu();
+            hideCategoryContextMenu();
+            if (e.target.closest('.category-btn')) {
+                e.preventDefault();
+                // e.stopPropagation();
+                const categoryName = e.target.closest('.category-btn').dataset.category;
+                showCategoryContextMenu(e, categoryName);
+            }
+        });
         // 分类右键菜单项点击
         document.getElementById('rename-category').addEventListener('click', () => {
             const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
@@ -1585,19 +1919,18 @@
 
         // 确保分类右键菜单在点击其他区域时关闭
         document.addEventListener('click', (e) => {
-            const categoryContextMenu = document.getElementById('category-context-menu');
-            if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
-                hideCategoryContextMenu();
-            }
+            hideContextMenu();
+            hideCategoryContextMenu();
+            // const categoryContextMenu = document.getElementById('category-context-menu');
+            // if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
+            //     hideCategoryContextMenu();
+            // }
         });
 
         // 点击遮罩层关闭分类右键菜单
         document.getElementById('overlay').addEventListener('click', hideCategoryContextMenu);
 
-        // 编辑弹窗操作
-        document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
-        document.getElementById('save-edit').addEventListener('click', saveItem);
-        document.getElementById('overlay').addEventListener('click', hideEditModal);
+
 
 ///////////////////////////////////////////////// 信息项事件监听器 开始 ///////////////////////////////////////////////////
         // 初始化 items 相关变量
@@ -1746,6 +2079,14 @@
             const contextMenu = document.getElementById('context-menu');
             if (contextMenu && contextMenu.style.display === 'block') {
                 return;
+            }
+
+            // 当按下Shift键时，完全阻止浏览器默认的文本选择行为
+            if (event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                // 确保不会触发文本选择
+                window.getSelection().removeAllRanges();
             }
 
             const itemId = this.dataset.id;
@@ -1963,119 +2304,126 @@
             ensureItemsDraggable();
         };
 /////////////////////////////////////////////////// 增加 renderItems 功能 结束 ///////////////////////////////////////////////////
-        // 使用更接近真实用户操作的方式填充内容
-        function simulateUserInput(element, text) {
-            try {
-                // 聚焦到目标元素
-                element.focus();
+        /**
+         * 给 TinyMCE editor 绑定事件监听器
+         */
+        function bindEditorEvents(editor) {
+            if (!editor || editor._tampermonkeyBound) return; // 避免重复绑定
+            editor._tampermonkeyBound = true;
 
-                // 选中当前内容（如果有的话）
-                if (element.setSelectionRange) {
-                    element.setSelectionRange(0, element.value.length);
-                } else if (element.createTextRange) {
-                    const range = element.createTextRange();
-                    range.select();
+            console.log("[TinyMCE] 绑定事件:", editor.id);
+
+            // // TinyMCE API 层事件
+            // editor.on('click', (e) => {
+            //     console.log(`[TinyMCE API] [${editor.id}] click:`, e);
+            // });
+            // editor.on('keyup', (e) => {
+            //     console.log(`[TinyMCE API] [${editor.id}] keyup:`, e.key);
+            // });
+            // editor.on('change', () => {
+            //     console.log(`[TinyMCE API] [${editor.id}] content changed:`, editor.getContent());
+            // });
+
+            // 监听 iframe 内部 DOM
+            editor.on('init', () => {
+                const iframe = editor.iframeElement;
+                if (iframe && iframe.contentDocument) {
+                    const doc = iframe.contentDocument;
+
+                    doc.addEventListener('click', (e) => {
+                        editor.setContent(lastClickedItemContent);
+                        // simulateInputAtCursor(lastClickedItemContent);
+                        console.log(`[TinyMCE DOM] [${editor.id}] Clicked:`, e.target);
+                    });
+
+                    // doc.addEventListener('input', (e) => {
+                    //     console.log(`[TinyMCE DOM] [${editor.id}] Input:`, e.target.textContent);
+                    // });
+
+                    console.log(`[TinyMCE] DOM 监听已挂载 -> ${editor.id}`);
                 }
+            });
+        }
 
-                // 尝试使用document.execCommand('insertText')方法，这更接近真实用户输入
-                try {
-                    // 插入新文本，这会替换选中的内容
-                    if (document.execCommand('insertText', false, text)) {
-                        console.log('[AutoFill Debug] 使用document.execCommand成功填充内容');
-                    } else {
-                        throw new Error('document.execCommand failed');
+        /**
+         * 检查并绑定所有已存在的 TinyMCE 实例
+         * @returns {boolean} 是否绑定到了新的 editor
+         */
+        function checkEditorsAndReturnBound() {
+            let bound = false;
+            if (unsafeWindow.tinymce && unsafeWindow.tinymce.editors && unsafeWindow.tinymce.editors.length > 0) {
+                unsafeWindow.tinymce.editors.forEach(editor => {
+                    if (editor && !editor.destroyed && !editor._tampermonkeyBound) {
+                        bindEditorEvents(editor);
+                        bound = true; // ✅ 标记有新的 editor 被绑定
                     }
-                } catch (execError) {
-                    console.warn('[AutoFill Debug] document.execCommand失败，尝试备用方法:', execError);
-
-                    // 备用方法1: 使用Clipboard API
-                    if (navigator.clipboard && window.isSecureContext) {
-                        console.log('[AutoFill Debug] 尝试使用Clipboard API');
-                        navigator.clipboard.writeText(text).then(() => {
-                            // 模拟Ctrl+V粘贴操作
-                            const pasteEvent = new KeyboardEvent('keydown', {
-                                bubbles: true,
-                                cancelable: true,
-                                key: 'v',
-                                ctrlKey: true
-                            });
-                            element.dispatchEvent(pasteEvent);
-                        }).catch(clipboardError => {
-                            console.error('[AutoFill Error] Clipboard API失败:', clipboardError);
-                            // 最终备用方案: 直接设置值
-                            element.value = text;
-                            triggerInputEvents(element);
-                        });
-                    } else {
-                        // 最终备用方案: 直接设置值
-                        element.value = text;
-                        triggerInputEvents(element);
-                    }
-                }
-            } catch (error) {
-                console.error('[AutoFill Error] 填充内容失败:', error);
-                // 最后的兜底方案
-                try {
-                    element.value = text;
-                    triggerInputEvents(element);
-                } catch (fallbackError) {
-                    console.error('[AutoFill Error] 兜底方案也失败:', fallbackError);
-                }
+                });
             }
+            console.log('bound:', bound);
+            return bound;
         }
 
-        // 触发输入事件的辅助函数
-        function triggerInputEvents(element) {
-            // 创建并触发input事件，使用compositionend标记为真实用户输入
-            const inputEvent = new Event('input', {
-                bubbles: true,
-                cancelable: true
-            });
-            inputEvent.isTrusted = true; // 虽然现代浏览器会忽略这个设置，但还是尝试设置
-            element.dispatchEvent(inputEvent);
-
-            // 触发compositionstart和compositionend事件，模拟IME输入完成
-            const compStartEvent = new Event('compositionstart', { bubbles: true });
-            element.dispatchEvent(compStartEvent);
-
-            const compEndEvent = new Event('compositionend', { bubbles: true });
-            compEndEvent.data = element.value; // 设置完成的文本
-            element.dispatchEvent(compEndEvent);
-
-            // 触发change事件
-            const changeEvent = new Event('change', {
-                bubbles: true,
-                cancelable: true
-            });
-            element.dispatchEvent(changeEvent);
+        /**
+         * 当 DOM 变化时，启动短期轮询，最多 2 秒，每 200ms 检查一次
+         * 一旦发现并绑定成功，就立即退出
+         */
+        function startShortPolling() {
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                if (checkEditorsAndReturnBound()) {  // ✅ 如果发现新 editor 并绑定，就退出
+                    clearInterval(interval);
+                    return;
+                }
+                elapsed += 200;
+                if (elapsed >= 2000) { // 最多 2s
+                    clearInterval(interval);
+                }
+            }, 200);
         }
+
+        /**
+         * 使用 MutationObserver 监听 DOM 变化
+         */
+        function observeForEditors() {
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length > 0) {
+                        // 当有新节点加入时，触发一次短期轮询
+                        startShortPolling();
+                        break;
+                    }
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
+        /**
+         * 主入口
+         */
+        function tinyMCEInit() {
+            // 先检查一次已有实例
+            checkEditorsAndReturnBound();
+            // 开启 DOM 监听
+            observeForEditors();
+            console.log("[TinyMCE] 事件监听初始化完成 (Observer + 短轮询).");
+        }
+
+        tinyMCEInit();
 
         // 添加全局输入框点击监听，用于自动填充内容
-        document.addEventListener('click', (e) => {
-            // 检查点击的元素是否为可输入元素并且有最近点击的项目内容
-            let targetElement = null;
+        document.addEventListener('mouseup', (e) => {
             console.log('[AutoFill Debug] 点击事件触发');
-            // 1. 检查直接点击的元素是否为可输入元素
-            // 只检测直接点击的可输入元素
-            if (isInputElement(e.target)) {
-                targetElement = e.target;
-                console.log('[AutoFill Debug] targetElemnet:', targetElement);
-            }
 
             // 执行自动填充
-            if (targetElement && lastClickedItemContent) {
-                console.log('[AutoFill Debug] 检测到可输入元素被选中，执行自动填充');
-
-                // 聚焦到目标元素
-                try {
-                    targetElement.focus();
-                } catch (err) {
-                    console.log('[AutoFill Debug] 无法聚焦到元素:', err);
-                }
+            if (lastClickedItemContent) {
+                console.log('[AutoFill Debug] 执行自动填充');
 
                 // 使用模拟用户输入的方式填充内容
-                simulateUserInput(targetElement, lastClickedItemContent);
-
+                simulateInputAtCursor(lastClickedItemContent);
                 // 清除缓存的内容，避免重复填充
                 lastClickedItemContent = null;
                 if (autoFillTimeout) {
@@ -2085,35 +2433,93 @@
             }
         });
 
-        // 判断元素是否为可输入元素的通用函数
-        function isInputElement(element) {
-            // 检查常见的表单输入元素
-            if ((element.tagName === 'INPUT' &&
-                (element.type === 'text' || element.type === 'email' ||
-                    element.type === 'password' || element.type === 'search' ||
-                    element.type === 'tel' || element.type === 'url' ||
-                    element.type === 'number' || element.type === 'date' ||
-                    element.type === 'datetime-local')) ||
-                element.tagName === 'TEXTAREA' ||
-                element.tagName === 'SELECT' ||
-                // 检查是否为contenteditable元素
-                element.hasAttribute('contenteditable')) {
-                // 确保元素是可见且可编辑的
-                return isElementVisible(element) &&
-                    !element.disabled &&
-                    !element.readOnly;
-            }
-            return false;
-        }
+        // 模拟执行粘贴，尝试所有的可能方式，每0.3秒钟检查一次是否有可输入的焦点元素，持续3s
+        function simulateInputAtCursor(message) {
+            const maxWaitTime = 3000; // 最大等待时间（毫秒）
+            const checkInterval = 300; // 检查间隔（毫秒）
 
-        // 检查元素是否可见
-        function isElementVisible(element) {
-            const style = window.getComputedStyle(element);
-            return (style.display !== 'none' &&
-                style.visibility !== 'hidden' &&
-                style.opacity !== '0' &&
-                element.offsetWidth > 0 &&
-                element.offsetHeight > 0);
+            let attempts = 0;
+            const interval = setInterval(() => {
+                const activeElement = document.activeElement;
+
+                if (activeElement && (
+                    activeElement instanceof HTMLInputElement ||
+                    activeElement instanceof HTMLTextAreaElement ||
+                    (activeElement.isContentEditable && activeElement.contentEditable === 'true')
+                )) {
+                    clearInterval(interval);
+                    activeElement.focus();
+
+                    // 方式一：尝试使用 document.execCommand 插入文本
+                    if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+                        try {
+                            document.execCommand('insertText', false, message);
+                            console.log('粘贴成功（方式一：execCommand）');
+                            return;
+                        } catch (e) {
+                            console.warn('方式一失败，尝试其他方法');
+                        }
+                    }
+                    
+
+                    // 方式二：现代API setRangeText（仅限 input/textarea）
+                    if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+                        if (typeof activeElement.setRangeText === 'function') {
+                            try {
+                                activeElement.setRangeText(
+                                    message,
+                                    activeElement.selectionStart,
+                                    activeElement.selectionEnd,
+                                    'end'
+                                );
+                                console.log('粘贴成功（方式二：setRangeText）');
+                                return;
+                            } catch (e) {
+                                console.warn('方式二失败');
+                            }
+                        }
+                    }
+
+                    // 方式三：contenteditable 的 Selection + Range API
+                    if (activeElement.isContentEditable) {
+                        try {
+                            const sel = window.getSelection();
+                            if (sel.rangeCount > 0) {
+                                const range = sel.getRangeAt(0);
+                                range.deleteContents();
+                                range.insertNode(document.createTextNode(message));
+                                range.collapse(false);
+                                console.log('粘贴成功（方式三：Range API）');
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('方式三失败');
+                        }
+                    }
+                    // 备用方法1: 使用Clipboard API
+                    const clipboardData = new DataTransfer();
+                    clipboardData.setData('text/plain', message);
+
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        bubbles: true,
+                        cancelable: true,
+                        clipboardData
+                    });
+
+                    activeElement.dispatchEvent(pasteEvent);
+                    console.log("尝试模拟触发粘贴事件，但不知道是否成功。。。，建议直接用Ctrl+单击复制内容，然后手动粘贴");
+                    return;
+
+                } else {
+                    // 如果还没有超过最大等待时间，继续检查
+                    attempts++;
+                    if (attempts * checkInterval >= maxWaitTime) {
+                        // 超过最大等待时间，停止查找并打印错误信息
+                        clearInterval(interval);
+                        console.error('在3秒内未找到可输入的焦点元素，放弃执行粘贴动作。');
+                    }
+                }
+            }, checkInterval);
         }
 
         // 快捷键
@@ -2146,9 +2552,9 @@
         // 确保应用固定状态
         // 强制应用appData.isFixed的值，不管之前的状态如何
         if (appData.isFixed) {
-            document.getElementById('personal-info-assistant').classList.add('fixed');
+            document.getElementById('personal-info-assistant').classList.add('isFixed');
         } else {
-            document.getElementById('personal-info-assistant').classList.remove('fixed');
+            document.getElementById('personal-info-assistant').classList.remove('isFixed');
         }
 
         // 初始化fix-btn的状态，确保与appData.isFixed保持一致
