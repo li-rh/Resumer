@@ -1,13 +1,14 @@
 // ==UserScript==
-// @name         个人信息助手
-// @namespace    http://tampermonkey.net/
+// @name         Resumer
+// @namespace    https://greasyfork.org/zh-CN/users/1375382-ryanli
 // @version      3.0.2
-// @description  侧边栏形式的个人信息管理助手，支持分类、搜索、拖拽排序等功能
-// @author       You
+// @description  侧边栏形式的个人简历助手、信息管理助手，支持自动填充、分类、搜索、拖拽排序等功能
+// @author       Ryanli
 // @match        *://*/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
+// @license      MIT
 // ==/UserScript==
 
 (function () {
