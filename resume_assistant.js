@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Resumer
 // @namespace    https://greasyfork.org/zh-CN/users/1375382-ryanli
-// @version      4.0.0
+// @version      4.0.5
 // @description  侧边栏形式的个人简历助手、信息管理助手，支持自动填充、分类、搜索、拖拽排序等功能
 // @author       Ryanli
 // @match        *://*/*
@@ -1097,10 +1097,10 @@
                 </div>
             `;
 
-            const contextMenu = document.createElement('div');
-            contextMenu.className = 'context-menu';
-            contextMenu.id = 'context-menu';
-            contextMenu.innerHTML = `
+            const itemContextMenu = document.createElement('div');
+            itemContextMenu.className = 'context-menu';
+            itemContextMenu.id = 'context-menu';
+            itemContextMenu.innerHTML = `
                 <div class="context-menu-item" id="edit-item">编辑</div>
                 <div class="context-menu-item" id="delete-item">删除</div>
             `;
@@ -1239,7 +1239,7 @@
             overlay.id = 'overlay';
 
             document.body.appendChild(assistant);
-            document.body.appendChild(contextMenu);
+            document.body.appendChild(itemContextMenu);
             document.body.appendChild(categoryContextMenu);
             document.body.appendChild(editModal);
             document.body.appendChild(categoryModal);
@@ -1266,7 +1266,7 @@
             this.elements.itemsContainer = document.querySelector(Config.SELECTORS.ITEMS_CONTAINER);
             this.elements.searchInput = document.querySelector(Config.SELECTORS.SEARCH_INPUT);
             this.elements.addItemBtn = document.querySelector(Config.SELECTORS.ADD_ITEM_BTN);
-            this.elements.contextMenu = document.querySelector(Config.SELECTORS.CONTEXT_MENU);
+            this.elements.itemContextMenu = document.querySelector(Config.SELECTORS.CONTEXT_MENU);
             this.elements.editItemMenu = document.querySelector(Config.SELECTORS.EDIT_ITEM_MENU);
             this.elements.deleteItemMenu = document.querySelector(Config.SELECTORS.DELETE_ITEM_MENU);
             this.elements.categoryContextMenu = document.querySelector(Config.SELECTORS.CATEGORY_CONTEXT_MENU);
@@ -1384,15 +1384,15 @@
      */
     const UI = {
         // --- Context Menus ---
-        showContextMenu: function(event, itemId) {
-            const menu = DOM.elements.contextMenu;
+        showItemContextMenu: function(event, itemId) {
+                const menu = DOM.elements.itemContextMenu;
             menu.style.left = `${event.clientX}px`;
             menu.style.top = `${event.clientY}px`;
             menu.style.display = 'block';
             menu.dataset.itemId = itemId;
         },
-        hideContextMenu: function() {
-            if(DOM.elements.contextMenu) DOM.elements.contextMenu.style.display = 'none';
+        hideItemContextMenu: function() {
+                if(DOM.elements.itemContextMenu) DOM.elements.itemContextMenu.style.display = 'none';
         },
         showCategoryContextMenu: function(event, categoryName) {
             const menu = DOM.elements.categoryContextMenu;
@@ -1983,7 +1983,7 @@
         // --- Global Clicks / Keys ---
         onDocumentClick: function(e) {
             // 1. 关闭右键菜单
-            UI.hideContextMenu();
+            UI.hideItemContextMenu();
             UI.hideCategoryContextMenu();
             
             // 2. 点击外部自动收起侧边栏
@@ -2075,12 +2075,18 @@
 
         // --- Category Container (Delegated) ---
         onCategoryContainerClick: function(e) {
-            e.stopPropagation();
             const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
             if (categoryBtn) {
                 State.data.activeCategory = categoryBtn.dataset.category;
-                DOM.renderCategories();
-                DOM.renderItems();
+
+                // 关键修复：
+                // 修复方法巧妙地利用了 JavaScript 的事件循环机制：使用 setTimeout(() => {}, 0) 将渲染操作延迟到下一个事件循环执行。
+                // 如果不延迟，renderCategories() 会立即销毁 e.target (被点击的按钮),
+                // 导致事件冒泡到 document 时, onDocumentClick 中的 assistant.contains(e.target) 会返回 false, 从而错误地关闭侧边栏。
+                setTimeout(() => {
+                    DOM.renderCategories();
+                    DOM.renderItems();
+                }, 0);
             }
             if (e.target.closest(Config.SELECTORS.ADD_CATEGORY_BTN)) {
                 UI.showCategoryModal();
@@ -2090,6 +2096,9 @@
             const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
             if (categoryBtn) {
                 e.preventDefault();
+                // 在打开新菜单前，关闭所有已打开的菜单
+                UI.hideItemContextMenu();
+                UI.hideCategoryContextMenu();
                 const categoryName = categoryBtn.dataset.category;
                 if (categoryName !== Config.DEFAULT_CATEGORY) {
                     UI.showCategoryContextMenu(e, categoryName);
@@ -2187,7 +2196,7 @@
             if (!itemEl) return;
 
             // 检查右键菜单是否可见
-            if (DOM.elements.contextMenu.style.display === 'block') return;
+            if (DOM.elements.itemContextMenu.style.display === 'block') return;
 
             const itemId = itemEl.dataset.id;
             const item = State.data.items.find(i => i.id === itemId);
@@ -2218,10 +2227,10 @@
             const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
             if (itemEl) {
                 e.preventDefault();
-                UI.hideContextMenu();
+                UI.hideItemContextMenu();
                 UI.hideCategoryContextMenu();
                 const itemId = itemEl.dataset.id;
-                UI.showContextMenu(e, itemId);
+                UI.showItemContextMenu(e, itemId);
             }
         },
         onItemsContainerDragStart: function(e) {
@@ -2305,15 +2314,15 @@
 
         // --- Item Context Menu ---
         onEditItemMenuClick: function() {
-            const itemId = DOM.elements.contextMenu.dataset.itemId;
-            UI.hideContextMenu();
+            const itemId = DOM.elements.itemContextMenu.dataset.itemId;
+                UI.hideItemContextMenu();
             if (itemId) {
                 UI.showEditModal(itemId);
             }
         },
         onDeleteItemMenuClick: function() {
-            const itemId = DOM.elements.contextMenu.dataset.itemId;
-            UI.hideContextMenu();
+            const itemId = DOM.elements.itemContextMenu.dataset.itemId;
+                UI.hideItemContextMenu();
             if (itemId) {
                 UI.showDeleteItemConfirm(itemId, (id) => {
                     Storage.deleteItemById(id);
