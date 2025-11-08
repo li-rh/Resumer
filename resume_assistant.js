@@ -2073,21 +2073,41 @@
             // 隐藏详情弹窗
             hideDetailModal();
         }
+        // 侧边栏中的信息项内容完全不可选择
+        function addAntiSelectStyles() {
+            const style = document.createElement('style');
+            style.textContent = `
+                /* 彻底禁用整个侧边栏的文本选择 */
+                #personal-info-assistant,
+                #personal-info-assistant *,
+                #personal-info-assistant *:before,
+                #personal-info-assistant *:after {
+                    user-select: none !important;
+                    -webkit-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    -webkit-touch-callout: none !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                    cursor: default !important;
+                }
 
+                /* 特殊处理按钮和可点击元素 */
+                #personal-info-assistant button,
+                #personal-info-assistant .info-item,
+                #personal-info-assistant .category-btn {
+                    cursor: pointer !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        addAntiSelectStyles();
         // 处理信息项点击事件
         function handleItemClick(event) {
             // 检查右键菜单是否可见，如果可见则不执行填充功能
             const contextMenu = document.getElementById('context-menu');
             if (contextMenu && contextMenu.style.display === 'block') {
                 return;
-            }
-
-            // 当按下Shift键时，完全阻止浏览器默认的文本选择行为
-            if (event.shiftKey) {
-                event.preventDefault();
-                event.stopPropagation();
-                // 确保不会触发文本选择
-                window.getSelection().removeAllRanges();
             }
 
             const itemId = this.dataset.id;
