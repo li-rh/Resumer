@@ -2365,6 +2365,11 @@
         init: function() {
             const els = DOM.elements; //
             
+            // --- 禁用侧边栏右键菜单 ---  
+            els.assistant.addEventListener('contextmenu', function(e) {
+                e.preventDefault(); // 阻止默认右键菜单显示
+            });
+            
             // --- Sidebar Controls ---
             els.toggleBtn.addEventListener('click', Handlers.onTogglePositionClick);
             els.fixBtn.addEventListener('click', Handlers.onFixBtnClick);
