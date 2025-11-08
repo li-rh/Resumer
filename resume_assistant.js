@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Resumer
 // @namespace    https://greasyfork.org/zh-CN/users/1375382-ryanli
-// @version      3.0.2
+// @version      4.0.0
 // @description  侧边栏形式的个人简历助手、信息管理助手，支持自动填充、分类、搜索、拖拽排序等功能
 // @author       Ryanli
 // @match        *://*/*
@@ -14,8 +14,143 @@
 (function () {
     'use strict';
 
-    // 样式定义
-    const styles = `
+    /**
+     * ----------------------------------------------------------------
+     * 模块: Config
+     * 存储所有常量、选择器、类名、存储键和魔法数字
+     * ----------------------------------------------------------------
+     */
+    const Config = {
+        SELECTORS: {
+            ASSISTANT: '#personal-info-assistant',
+            HEADER: '#assistant-header',
+            TITLE: '#assistant-title',
+            CONTROLS: '#assistant-controls',
+            TOGGLE_BTN: '#toggle-btn',
+            FIX_BTN: '#fix-btn',
+            CLOSE_BTN: '#close-btn',
+            CONTENT: '#assistant-content',
+            CATEGORY_CONTAINER: '#category-container',
+            CATEGORY_BTN: '.category-btn',
+            ADD_CATEGORY_BTN: '#add-category',
+            ITEMS_CONTAINER: '#items-container',
+            INFO_ITEM: '.info-item',
+            ITEM_TITLE: '.item-title',
+            ITEM_CATEGORY: '.item-category',
+            FOOTER: '#assistant-footer',
+            SEARCH_INPUT: '#search-input',
+            ADD_ITEM_BTN: '#add-item-btn',
+            CONTEXT_MENU: '#context-menu',
+            EDIT_ITEM_MENU: '#edit-item',
+            DELETE_ITEM_MENU: '#delete-item',
+            CATEGORY_CONTEXT_MENU: '#category-context-menu',
+            RENAME_CATEGORY_MENU: '#rename-category',
+            DELETE_CATEGORY_MENU: '#delete-category-menu',
+            EDIT_MODAL: '#edit-modal',
+            EDIT_TITLE: '#edit-title',
+            EDIT_START_DATE: '#edit-start-date',
+            EDIT_END_DATE: '#edit-end-date',
+            EDIT_CONTENT: '#edit-content',
+            EDIT_CATEGORY: '#edit-category',
+            CANCEL_EDIT_BTN: '#cancel-edit',
+            SAVE_EDIT_BTN: '#save-edit',
+            CATEGORY_MODAL: '#category-modal',
+            CATEGORY_NAME_INPUT: '#category-name',
+            CANCEL_CATEGORY_BTN: '#cancel-category',
+            SAVE_CATEGORY_BTN: '#save-category',
+            OVERLAY: '#overlay',
+            DETAIL_MODAL: '#detail-modal',
+            DETAIL_TITLE: '#detail-title',
+            DETAIL_CATEGORY: '#detail-category',
+            DETAIL_DATE: '#detail-date',
+            DETAIL_CONTENT: '#detail-content',
+            // 动态创建的 Modal ID
+            DELETE_ITEM_MODAL: '#delete-item-modal',
+            CANCEL_DELETE_ITEM_BTN: '#cancel-delete-item',
+            CONFIRM_DELETE_ITEM_BTN: '#confirm-delete-item',
+            DELETE_CATEGORY_MODAL: '#delete-category-modal',
+            CANCEL_DELETE_CATEGORY_BTN: '#cancel-delete-category',
+            CONFIRM_DELETE_CATEGORY_BTN: '#confirm-delete-category',
+            RENAME_CATEGORY_MODAL: '#rename-category-modal',
+            NEW_CATEGORY_NAME_INPUT: '#new-category-name',
+            CANCEL_RENAME_CATEGORY_BTN: '#cancel-rename-category',
+            CONFIRM_RENAME_CATEGORY_BTN: '#confirm-rename-category',
+        },
+        CLASSES: {
+            LEFT: 'left',
+            COLLAPSED: 'collapsed',
+            DRAGGING: 'dragging',
+            DRAG_READY: 'drag-ready',
+            FIXED: 'isFixed',
+            OPEN: 'open',
+            ACTIVE: 'active',
+            CATEGORY_BTN: 'category-btn', // 修复：移除类名前的点
+            INFO_ITEM: 'info-item', // 修复：添加 info-item 类名
+            DYNAMIC_MODAL: 'assistant-dynamic-modal', // 动态模态框的通用类
+        },
+        STORAGE_KEYS: {
+            RESET_FLAG: 'personalInfoAssistant_resetStorage',
+            CATEGORIES: 'personalInfoAssistant_categories',
+            ITEMS: 'personalInfoAssistant_items',
+            IS_FIXED: 'personalInfoAssistant_isFixed',
+            SIDEBAR_POSITION: 'personalInfoAssistant_sidebarPosition',
+            COLLAPSED_POSITION: 'personalInfoAssistant_collapsedPosition',
+            OLD_DATA: 'personalInfoAssistantData', // 兼容旧版
+        },
+        TIMERS: {
+            SIDEBAR_DRAG_START_DELAY: 300,  // 侧边栏拖拽延迟
+            DETAIL_HOVER_DELAY: 1500,        // 详情悬停
+            AUTO_FILL_TIMEOUT: 3000,         // 自动填充
+            TINYMCE_POLL_INTERVAL: 200,    // TinyMCE 轮询间隔
+            TINYMCE_POLL_TIMEOUT: 2000,        // TinyMCE 轮询超时
+            SIMULATE_INPUT_INTERVAL: 300,    // 模拟输入检查间隔
+            SIMULATE_INPUT_TIMEOUT: 3000,        // 模拟输入超时
+        },
+        DEFAULT_CATEGORY: '全部',
+    };
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: StyleManager
+     * 负责管理和注入所有 CSS 样式
+     * ----------------------------------------------------------------
+     */
+    const StyleManager = {
+        inject: function() {
+            GM_addStyle(this.getStyles());
+            this.addAntiSelectStyles();
+        },
+
+        addAntiSelectStyles: function() {
+            const style = document.createElement('style');
+            style.textContent = `
+                /* 彻底禁用整个侧边栏的文本选择 */
+                ${Config.SELECTORS.ASSISTANT},
+                ${Config.SELECTORS.ASSISTANT} *,
+                ${Config.SELECTORS.ASSISTANT} *:before,
+                ${Config.SELECTORS.ASSISTANT} *:after {
+                    user-select: none !important;
+                    -webkit-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    -webkit-touch-callout: none !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                    cursor: default !important;
+                }
+
+                /* 特殊处理按钮和可点击元素 */
+                ${Config.SELECTORS.ASSISTANT} button,
+                ${Config.SELECTORS.INFO_ITEM},
+                ${Config.SELECTORS.CATEGORY_BTN} {
+                    cursor: pointer !important;
+                }
+            `;
+            document.head.appendChild(style);
+        },
+
+        getStyles: function() {
+            // (样式字符串过长，此处折叠)
+            return `
         #personal-info-assistant {
             position: fixed;
             top: 0;
@@ -549,1917 +684,50 @@
             min-height: 100px;
             line-height: 1.5;
         }
-    `;
-
-    // 添加样式
-    GM_addStyle(styles);
-
-    // 初始化数据
-    let appData = {
-        isFixed: true,
-        sidebarPosition: 'right', // 默认在右侧
-        collapsedPosition: null, // 最小化状态下的位置信息
-        categories: ['工作', '学习', '生活'],
-        items: [
-            {
-                title: '示例信息',
-                content: '这是一条示例信息，您可以编辑或删除它。',
-                category: '工作',
-                startDate: '2025-10-03',
-                endDate: '2025-10-03',
-                id: generateId(),
-                order: 1
-            }
-        ],
+        /* 动态创建的模态框的通用样式 */
+        .assistant-dynamic-modal {
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: white; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25); 
+            padding: 25px; 
+            width: 90%; 
+            max-width: 450px; 
+            display: none; 
+            z-index: 10000; 
+            border: 1px solid #e0e0e0;
+        }
+            `;
+        }
     };
-    // 初始化存储结构
-    function initializeStorage() {
-        const resetFlag = GM_getValue('personalInfoAssistant_resetStorage', true);
-        if (resetFlag) {
-            // 只在安装脚本时默认执行一次
-            GM_setValue('personalInfoAssistant_resetStorage', false);
-            
-            // 初始化默认数据
-            const defaultData = appData
-            
-            // 使用层级结构存储默认数据
-            GM_setValue('personalInfoAssistant_categories', defaultData.categories);
-            GM_setValue('personalInfoAssistant_items', defaultData.items);
-            GM_setValue('personalInfoAssistant_isFixed', defaultData.isFixed);
-            GM_setValue('personalInfoAssistant_sidebarPosition', defaultData.sidebarPosition);
-            GM_setValue('personalInfoAssistant_collapsedPosition', defaultData.collapsedPosition);
-            
-            console.log('个人信息助手存储结构已初始化');
-        }
-    }
 
-    // 从存储加载数据 - 使用层级结构加载
-    function loadData() {
-        // 分别加载各个数据部分，支持向后兼容
-        const savedCategories = GM_getValue('personalInfoAssistant_categories', null);
-        const savedItems = GM_getValue('personalInfoAssistant_items', null);
-        const savedIsFixed = GM_getValue('personalInfoAssistant_isFixed', null);
-        const savedSidebarPosition = GM_getValue('personalInfoAssistant_sidebarPosition', null);
-        const savedCollapsedPosition = GM_getValue('personalInfoAssistant_collapsedPosition', null);
-        
-        // 检查是否存在旧格式的数据（向后兼容）
-        const oldFormatData = GM_getValue('personalInfoAssistantData', null);
-        if (oldFormatData) {
-            try {
-                appData = JSON.parse(oldFormatData);
-                // 迁移数据到新格式
-                saveData();
-                // 删除旧格式数据
-                GM_setValue('personalInfoAssistantData', null);
-                console.error('数据已从旧格式迁移到新格式');
-                return;
-            } catch (e) {
-                console.error('Failed to parse old format data:', e);
-            }
-        }
-        console.error('未加载到旧数据，使用新数据格式');
-        
-        // 使用新格式数据
-        if (savedCategories) appData.categories = savedCategories;
-        if (savedItems) appData.items = savedItems;
-        if (savedIsFixed !== undefined) appData.isFixed = savedIsFixed;
-        if (savedSidebarPosition) appData.sidebarPosition = savedSidebarPosition;
-        if (savedCollapsedPosition !== undefined) appData.collapsedPosition = savedCollapsedPosition;
-    }
+    /**
+     * ----------------------------------------------------------------
+     * 模块: Utils
+     * 存放可复用的工具函数
+     * ----------------------------------------------------------------
+     */
+    const Utils = {
+        generateId: function() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        },
 
-    // 保存数据到存储 - 使用层级结构存储
-    function saveData() {
-        // 分别存储各个数据部分，使用换行表示层级关系
-        GM_setValue('personalInfoAssistant_categories', appData.categories);
-        // 确保存储的items格式与初始化格式一致
-        GM_setValue('personalInfoAssistant_items', appData.items.map(item => ({
-            title: item.title || '',
-            content: item.content || '',
-            category: item.category || '工作',
-            startDate: item.startDate || '',
-            endDate: item.endDate || '',
-            id: item.id || generateId(),
-            order: item.order || 1
-        })));
-        GM_setValue('personalInfoAssistant_isFixed', appData.isFixed);
-        GM_setValue('personalInfoAssistant_sidebarPosition', appData.sidebarPosition);
-        GM_setValue('personalInfoAssistant_collapsedPosition', appData.collapsedPosition);
-    }
-
-    // 生成唯一ID
-    function generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-    // 初始化存储结构
-    initializeStorage();
-    
-    // 从存储加载数据
-    loadData();
-    // 保存数据，格式化数据
-    saveData();
-
-    // 创建DOM结构
-    function createDOM() {
-        // 创建侧边栏容器
-        const assistant = document.createElement('div');
-        assistant.id = 'personal-info-assistant';
-        assistant.className = 'collapsed';
-
-        // 创建头部
-        const header = document.createElement('div');
-        header.id = 'assistant-header';
-
-        // 根据保存的位置设置初始按钮文本和标题
-        const isLeftSide = appData.sidebarPosition === 'left';
-        const toggleBtnText = isLeftSide ? '▶' : '◀';
-        const toggleBtnTitle = isLeftSide ? '移到右侧' : '移到左侧';
-
-        header.innerHTML = `
-            <div id="assistant-title">信息助手</div>
-            <div id="assistant-controls">
-                <button class="control-btn" id="toggle-btn" title="${toggleBtnTitle}">${toggleBtnText}</button>
-                <button class="control-btn" id="fix-btn" title="固定">🔒</button>
-                <button class="control-btn" id="close-btn" title="点击关闭侧边栏">×</button>
-            </div>
-        `;
-
-        // 创建内容区域
-        const content = document.createElement('div');
-        content.id = 'assistant-content';
-
-        // 创建分类容器
-        const categoryContainer = document.createElement('div');
-        categoryContainer.id = 'category-container';
-
-        // 创建项目容器
-        const itemsContainer = document.createElement('div');
-        itemsContainer.id = 'items-container';
-
-        // 创建底部
-        const footer = document.createElement('div');
-        footer.id = 'assistant-footer';
-        footer.innerHTML = `
-            <input type="text" id="search-input" placeholder="搜索...">
-            <button id="add-item-btn">+ 添加信息</button>
-        `;
-
-        // 组装侧边栏
-        content.appendChild(categoryContainer);
-        content.appendChild(itemsContainer);
-        assistant.appendChild(header);
-        assistant.appendChild(content);
-        assistant.appendChild(footer);
-
-        // 创建右键菜单
-        const contextMenu = document.createElement('div');
-        contextMenu.classList.add('context-menu');
-        contextMenu.id = 'context-menu';
-        contextMenu.innerHTML = `
-            <div class="context-menu-item" id="edit-item">编辑</div>
-            <div class="context-menu-item" id="delete-item">删除</div>
-        `;
-
-        // 创建分类右键菜单
-        const categoryContextMenu = document.createElement('div');
-        categoryContextMenu.classList.add('context-menu');
-        categoryContextMenu.id = 'category-context-menu';
-        categoryContextMenu.innerHTML = `
-            <div class="context-menu-item" id="rename-category">重命名</div>
-            <div class="context-menu-item" id="delete-category-menu">删除</div>
-        `;
-
-        // 创建编辑弹窗
-        const editModal = document.createElement('div');
-        editModal.id = 'edit-modal';
-        editModal.innerHTML = `
-            <div class="modal-title">编辑信息</div>
-            <div class="form-group">
-                <label for="edit-title">标题</label>
-                <input type="text" id="edit-title" required>
-            </div>
-            <div class="form-group">
-                <label for="edit-start-date">开始日期</label>
-                <input type="date" id="edit-start-date">
-            </div>
-            <div class="form-group">
-                <label for="edit-end-date">结束日期</label>
-                <input type="date" id="edit-end-date">
-            </div>
-            <div class="form-group">
-                <label for="edit-content">内容</label>
-                <textarea id="edit-content" required></textarea>
-            </div>
-            <div class="form-group">
-                <label for="edit-category">分类</label>
-                <select id="edit-category"></select>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" id="cancel-edit">取消</button>
-                <button class="btn btn-primary" id="save-edit">保存</button>
-            </div>
-        `;
-
-        // 创建分类弹窗
-        const categoryModal = document.createElement('div');
-        categoryModal.id = 'category-modal';
-        categoryModal.innerHTML = `
-            <div class="modal-title">添加分类</div>
-            <div class="form-group">
-                <label for="category-name">分类名称</label>
-                <input type="text" id="category-name" placeholder="请输入分类名称" required>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" id="cancel-category">取消</button>
-                <button class="btn btn-primary" id="save-category">确定</button>
-            </div>
-        `;
-        // 复制编辑弹窗的样式
-        categoryModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
-
-        // 创建遮罩层
-        const overlay = document.createElement('div');
-        overlay.id = 'overlay';
-
-        // 添加到页面
-        document.body.appendChild(assistant);
-        document.body.appendChild(contextMenu);
-        document.body.appendChild(categoryContextMenu);
-        document.body.appendChild(editModal);
-        document.body.appendChild(categoryModal);
-        document.body.appendChild(overlay);
-
-        return {
-            assistant,
-            header,
-            content,
-            categoryContainer,
-            itemsContainer,
-            footer,
-            contextMenu,
-            editModal,
-            categoryModal,
-            overlay
-        };
-    }
-
-    // 渲染分类
-    function renderCategories(container, activeCategory = '全部') {
-        container.innerHTML = '';
-        // 添加全部标签
-        const allBtn = document.createElement('button');
-        allBtn.className = `category-btn ${activeCategory === '全部' ? 'active' : ''}`;
-        allBtn.textContent = '全部';
-        allBtn.dataset.category = '全部';
-        // "全部"分类不可拖拽
-        allBtn.draggable = false;
-        container.appendChild(allBtn);
-        // 添加分类标签
-        appData.categories.forEach(category => {
-            const btn = document.createElement('button');
-            btn.className = `category-btn ${activeCategory === category ? 'active' : ''}`;
-            btn.textContent = category;
-            btn.dataset.category = category;
-            // 设置分类按钮可拖拽
-            btn.draggable = true;
-            container.appendChild(btn);
-        });
-        // 添加分类按钮
-        const addBtn = document.createElement('button');
-        addBtn.id = 'add-category';
-        addBtn.textContent = '+';
-        addBtn.draggable = false;
-        container.appendChild(addBtn);
-    }
-
-    // 渲染信息项
-    function renderItems(container, filterCategory = '全部', searchTerm = '') {
-        container.innerHTML = '';
-
-        // 过滤并排序项目
-        let filteredItems = appData.items.filter(item => {
-            const categoryMatch = filterCategory === '全部' || item.category === filterCategory;
-            const searchMatch = !searchTerm ||
-                item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.content.toLowerCase().includes(searchTerm.toLowerCase());
-            return categoryMatch && searchMatch;
-        });
-
-        // 按order排序
-        filteredItems.sort((a, b) => a.order - b.order);
-
-        // 渲染项目
-        filteredItems.forEach(item => {
-            const itemEl = document.createElement('div');
-            itemEl.className = 'info-item';
-            itemEl.dataset.id = item.id;
-            itemEl.draggable = true;
-            itemEl.innerHTML = `
-                <div class="info-item-header">
-                    <div class="item-category">${item.category}</div>
-                </div>
-                <div class="item-title">${item.title}</div>
-                ${(item.startDate || item.endDate) ? `
-                    <div class="item-date">
-                        ${item.startDate && item.endDate ? `${item.startDate} - ${item.endDate}` : (item.startDate || item.endDate)}
-                    </div>
-                ` : ''}
-            `;
-
-            container.appendChild(itemEl);
-        });
-    }
-
-    // 显示条目右键菜单
-    function showContextMenu(event, itemId) {
-        const contextMenu = document.getElementById('context-menu');
-        contextMenu.style.left = `${event.clientX}px`;
-        contextMenu.style.top = `${event.clientY}px`;
-        contextMenu.style.display = 'block';
-
-        // 存储当前操作的项目ID
-        contextMenu.dataset.itemId = itemId;
-    }
-
-    // 隐藏条目右键菜单
-    function hideContextMenu() {
-        document.getElementById('context-menu').style.display = 'none';
-    }
-
-    // 显示分类右键菜单
-    function showCategoryContextMenu(event, categoryName) {
-        const categoryContextMenu = document.getElementById('category-context-menu');
-        categoryContextMenu.style.left = `${event.clientX}px`;
-        categoryContextMenu.style.top = `${event.clientY}px`;
-        categoryContextMenu.style.display = 'block';
-        // 存储当前操作的分类名称
-        categoryContextMenu.dataset.categoryName = categoryName;
-    }
-
-    // 隐藏分类右键菜单
-    function hideCategoryContextMenu() {
-        document.getElementById('category-context-menu').style.display = 'none';
-    }
-
-    // 显示条目编辑弹窗
-    function showEditModal(itemId = null) {
-        const modal = document.getElementById('edit-modal');
-        const overlay = document.getElementById('overlay');
-        const categorySelect = document.getElementById('edit-category');
-
-        // 清空并填充分类选择
-        categorySelect.innerHTML = '';
-        appData.categories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category;
-            option.textContent = category;
-            categorySelect.appendChild(option);
-        });
-
-        // 重置表单
-        document.getElementById('edit-title').value = '';
-        document.getElementById('edit-start-date').value = '';
-        document.getElementById('edit-end-date').value = '';
-        document.getElementById('edit-content').value = '';
-
-        // 如果是编辑模式，填充现有数据
-        if (itemId) {
-            const item = appData.items.find(i => i.id === itemId);
-            if (item) {
-                document.getElementById('edit-title').value = item.title;
-                document.getElementById('edit-start-date').value = item.startDate || '';
-                document.getElementById('edit-end-date').value = item.endDate || '';
-                document.getElementById('edit-content').value = item.content;
-                document.getElementById('edit-category').value = item.category;
-                modal.dataset.itemId = itemId;
-                document.querySelector('.modal-title').textContent = '编辑信息';
-            }
-        } else {
-            // 添加模式
-            modal.dataset.itemId = '';
-            document.querySelector('.modal-title').textContent = '添加信息';
-
-            // 获取当前活动的分类，并设置为默认分类（跳过'全部'分类）
-            const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
-            const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '';
-            if (activeCategory && activeCategory !== '全部' && appData.categories.includes(activeCategory)) {
-                document.getElementById('edit-category').value = activeCategory;
-            }
-        }
-
-        // 显示弹窗
-        modal.style.display = 'block';
-        overlay.style.display = 'block';
-
-        // 自动聚焦到标题输入框
-        document.getElementById('edit-title').focus();
-    }
-
-    // 隐藏条目编辑弹窗
-    function hideEditModal() {
-        document.getElementById('edit-modal').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
-    }
-
-    // 保存条目信息
-    function saveItem() {
-        const modal = document.getElementById('edit-modal');
-        const itemId = modal.dataset.itemId;
-        const title = document.getElementById('edit-title').value.trim();
-        const startDate = document.getElementById('edit-start-date').value;
-        const endDate = document.getElementById('edit-end-date').value;
-        const content = document.getElementById('edit-content').value.trim();
-        const category = document.getElementById('edit-category').value;
-
-        if (!title || !content) {
-            alert('请填写标题和内容');
-            return;
-        }
-
-        if (itemId) {
-            // 编辑现有项目
-            const index = appData.items.findIndex(i => i.id === itemId);
-            if (index !== -1) {
-                appData.items[index] = {
-                    ...appData.items[index],
-                    title,
-                    startDate,
-                    endDate,
-                    content,
-                    category
-                };
-            }
-        } else {
-            // 添加新项目
-            const maxOrder = appData.items.length > 0 ? Math.max(...appData.items.map(i => i.order)) : 0;
-            appData.items.push({
-                title,
-                content,
-                category,
-                startDate,
-                endDate,
-                id: generateId(),
-                order: maxOrder + 1
+        copyToClipboard: function(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('[Clipboard Debug] 成功复制到剪贴板:', text);
+            }).catch(err => {
+                console.error('[Clipboard Debug] 复制失败:', err);
             });
-        }
-
-        // 保存并更新界面
-        saveData();
-        updateUI();
-        hideEditModal();
-    }
-
-    // 删除条目信息项
-    function deleteItem(itemId) {
-        // 创建或获取删除确认弹窗
-        let deleteModal = document.getElementById('delete-item-modal');
-        if (!deleteModal) {
-            deleteModal = document.createElement('div');
-            deleteModal.id = 'delete-item-modal';
-            deleteModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
-            deleteModal.innerHTML = `
-                <div class="modal-title">删除信息</div>
-                <div style="margin: 20px 0; font-size: 14px; color: #333;">
-                    确定要删除这条信息吗？此操作无法撤销。
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" id="cancel-delete-item">取消</button>
-                    <button class="btn btn-primary" id="confirm-delete-item">确定</button>
-                </div>
-            `;
-            document.body.appendChild(deleteModal);
-        }
-
-        // 显示弹窗和遮罩
-        const overlay = document.getElementById('overlay');
-        deleteModal.style.display = 'block';
-        overlay.style.display = 'block';
-
-        // 为“确定”按钮添加一次性事件监听器
-        const confirmBtn = document.getElementById('confirm-delete-item');
-        const cancelBtn = document.getElementById('cancel-delete-item');
-
-        // 使用 { once: true } 确保监听器只执行一次，避免重复绑定
-        confirmBtn.addEventListener('click', function handler() {
-            // 执行删除操作
-            appData.items = appData.items.filter(item => item.id !== itemId);
-            saveData();
-            updateUI();
-            // 隐藏弹窗
-            deleteModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 为“取消”按钮添加一次性事件监听器
-        cancelBtn.addEventListener('click', function handler() {
-            deleteModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 点击遮罩层关闭
-        overlay.addEventListener('click', function handler(e) {
-            if (e.target === overlay) {
-                deleteModal.style.display = 'none';
-                overlay.style.display = 'none';
-            }
-        }, { once: true });
-    }
-
-    // 显示分类弹窗
-    function showCategoryModal() {
-        const modal = document.getElementById('category-modal');
-        const overlay = document.getElementById('overlay');
-        const categoryInput = document.getElementById('category-name');
-
-        // 重置输入框
-        categoryInput.value = '';
-
-        // 显示弹窗
-        modal.style.display = 'block';
-        overlay.style.display = 'block';
-
-        // 自动聚焦到输入框
-        categoryInput.focus();
-    }
-
-    // 隐藏分类弹窗
-    function hideCategoryModal() {
-        document.getElementById('category-modal').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
-    }
-
-    // 保存分类信息
-    function saveCategory() {
-        const categoryName = document.getElementById('category-name').value.trim();
-        if (categoryName) {
-            if (!appData.categories.includes(categoryName)) {
-                appData.categories.push(categoryName);
-                saveData();
-                updateUI();
-                hideCategoryModal();
-            } else {
-                alert('分类已存在！');
-            }
-        }
-    }
-
-    // 添加分类
-    function addCategory() {
-        showCategoryModal();
-    }
-
-    // 删除分类
-    function deleteCategory(categoryName) {
-        // 创建或获取删除确认弹窗
-        let deleteModal = document.getElementById('delete-category-modal');
-        if (!deleteModal) {
-            deleteModal = document.createElement('div');
-            deleteModal.id = 'delete-category-modal';
-            deleteModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
-            deleteModal.innerHTML = `
-                <div class="modal-title">删除分类</div>
-                <div style="margin: 20px 0; font-size: 14px; color: #333;">
-                    确定要删除分类“<strong>${categoryName}</strong>”吗？
-                </div>
-                <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-direction: column;">
-                    <label style="display: flex; align-items: center; cursor: pointer;">
-                        <input type="radio" name="delete-option" value="move" checked style="margin-right: 8px;">
-                        <span>将该分类下的所有信息移动到“<strong>全部</strong>”</span>
-                    </label>
-                    <label style="display: flex; align-items: center; cursor: pointer;">
-                        <input type="radio" name="delete-option" value="delete" style="margin-right: 8px;">
-                        <span>直接删除该分类下的所有信息</span>
-                    </label>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" id="cancel-delete-category">取消</button>
-                    <button class="btn btn-primary" id="confirm-delete-category">确定</button>
-                </div>
-            `;
-            document.body.appendChild(deleteModal);
-        } else {
-            // 如果弹窗已存在，更新其内容
-            deleteModal.querySelector('.modal-title').textContent = '删除分类';
-            const messageDiv = deleteModal.querySelector('div[style*="margin: 20px"]');
-            if (messageDiv) {
-                messageDiv.innerHTML = `
-                    确定要删除分类“<strong>${categoryName}</strong>”吗？
-                `;
-            }
-        }
-
-        // 显示弹窗和遮罩
-        const overlay = document.getElementById('overlay');
-        deleteModal.style.display = 'block';
-        overlay.style.display = 'block';
-
-        // 为“确定”按钮添加一次性事件监听器
-        const confirmBtn = document.getElementById('confirm-delete-category');
-        const cancelBtn = document.getElementById('cancel-delete-category');
-
-        // 使用 { once: true } 确保监听器只执行一次，避免重复绑定
-        confirmBtn.addEventListener('click', function handler() {
-            const selectedOption = deleteModal.querySelector('input[name="delete-option"]:checked').value;
-
-            if (selectedOption === 'move') {
-                // 将该分类下的信息移到“全部”
-                appData.items = appData.items.map(item => {
-                    if (item.category === categoryName) {
-                        return { ...item, category: '全部' };
-                    }
-                    return item;
-                });
-            } else if (selectedOption === 'delete') {
-                // 直接删除该分类下的所有信息
-                appData.items = appData.items.filter(item => item.category !== categoryName);
-            }
-
-            // 删除分类本身
-            appData.categories = appData.categories.filter(cat => cat !== categoryName);
-            saveData();
-            updateUI();
-            // 隐藏弹窗
-            deleteModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 为“取消”按钮添加一次性事件监听器
-        cancelBtn.addEventListener('click', function handler() {
-            deleteModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 点击遮罩层关闭
-        overlay.addEventListener('click', function handler(e) {
-            if (e.target === overlay) {
-                deleteModal.style.display = 'none';
-                overlay.style.display = 'none';
-            }
-        }, { once: true });
-    }
-    // 编辑/重命名分类
-    function editCategory(oldCategoryName) {
-        // 创建或获取重命名弹窗
-        let renameModal = document.getElementById('rename-category-modal');
-        if (!renameModal) {
-            renameModal = document.createElement('div');
-            renameModal.id = 'rename-category-modal';
-            renameModal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 25px; width: 90%; max-width: 450px; display: none; z-index: 10000; border: 1px solid #e0e0e0;';
-            renameModal.innerHTML = `
-                <div class="modal-title">重命名分类</div>
-                <div style="margin: 20px 0; font-size: 14px; color: #333;">
-                    请为分类“<strong>${oldCategoryName}</strong>”输入新名称：
-                </div>
-                <div class="form-group">
-                    <label for="new-category-name">新分类名称</label>
-                    <input type="text" id="new-category-name" value="${oldCategoryName}" required>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" id="cancel-rename-category">取消</button>
-                    <button class="btn btn-primary" id="confirm-rename-category">确定</button>
-                </div>
-            `;
-            document.body.appendChild(renameModal);
-        } else {
-            // 如果弹窗已存在，更新其内容
-            const messageDiv = renameModal.querySelector('div[style*="margin: 20px"]');
-            if (messageDiv) {
-                messageDiv.innerHTML = `
-                    请为分类“<strong>${oldCategoryName}</strong>”输入新名称：
-                `;
-            }
-            document.getElementById('new-category-name').value = oldCategoryName;
-        }
-
-        // 显示弹窗和遮罩
-        const overlay = document.getElementById('overlay');
-        renameModal.style.display = 'block';
-        overlay.style.display = 'block';
-
-        // 为“确定”按钮添加一次性事件监听器
-        const confirmBtn = document.getElementById('confirm-rename-category');
-        const cancelBtn = document.getElementById('cancel-rename-category');
-
-        confirmBtn.addEventListener('click', function handler() {
-            const newCategoryName = document.getElementById('new-category-name').value.trim();
-
-            if (!newCategoryName) {
-                alert('分类名称不能为空');
-                return;
-            }
-
-            if (newCategoryName === oldCategoryName) {
-                // 名称未改变，直接关闭
-                renameModal.style.display = 'none';
-                overlay.style.display = 'none';
-                return;
-            }
-
-            if (appData.categories.includes(newCategoryName)) {
-                alert('该分类名称已存在');
-                return;
-            }
-
-            // 更新分类数组
-            const index = appData.categories.indexOf(oldCategoryName);
-            if (index !== -1) {
-                appData.categories[index] = newCategoryName;
-            }
-
-            // 同步更新所有相关条目的分类
-            appData.items = appData.items.map(item => {
-                if (item.category === oldCategoryName) {
-                    return { ...item, category: newCategoryName };
-                }
-                return item;
-            });
-
-            saveData();
-            updateUI();
-            // 隐藏弹窗
-            renameModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 为“取消”按钮添加一次性事件监听器
-        cancelBtn.addEventListener('click', function handler() {
-            renameModal.style.display = 'none';
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        // 点击遮罩层关闭
-        overlay.addEventListener('click', function handler(e) {
-            if (e.target === overlay) {
-                renameModal.style.display = 'none';
-                overlay.style.display = 'none';
-            }
-        }, { once: true });
-
-        // 自动聚焦到输入框
-        document.getElementById('new-category-name').focus();
-    }
-    // 更新条目拖拽排序
-    function updateItemOrder(draggedId, targetId) {
-        const draggedItem = appData.items.find(item => item.id === draggedId);
-        const targetItem = appData.items.find(item => item.id === targetId);
-
-        if (draggedItem && targetItem) {
-            // 先将所有项目按当前order值排序
-            appData.items.sort((a, b) => a.order - b.order);
-
-            // 找到拖拽项目和目标项目在排序后的数组中的索引
-            const draggedIdx = appData.items.findIndex(item => item.id === draggedId);
-            const targetIdx = appData.items.findIndex(item => item.id === targetId);
-
-            // 如果找到了两个项目
-            if (draggedIdx !== -1 && targetIdx !== -1) {
-                // 移除拖拽项目
-                const removedItem = appData.items.splice(draggedIdx, 1)[0];
-
-                // 在目标位置插入拖拽项目
-                appData.items.splice(targetIdx, 0, removedItem);
-
-                // 重新分配order值，保持连续的顺序
-                appData.items.forEach((item, index) => {
-                    item.order = index + 1; // 从1开始编号
-                });
-
-                saveData();
-                updateUI();
-            }
-        }
-    }
-
-    // 更新分类拖拽排序
-    function updateCategoryOrder(draggedCategory, targetCategory) {
-        // 跳过"全部"分类的排序
-        if (draggedCategory === '全部' || targetCategory === '全部') {
-            return;
-        }
-
-        // 找到拖拽分类和目标分类在数组中的索引
-        const draggedIdx = appData.categories.indexOf(draggedCategory);
-        const targetIdx = appData.categories.indexOf(targetCategory);
-
-        // 如果找到了两个分类
-        if (draggedIdx !== -1 && targetIdx !== -1) {
-            // 移除拖拽分类
-            const removedCategory = appData.categories.splice(draggedIdx, 1)[0];
-
-            // 在目标位置插入拖拽分类
-            appData.categories.splice(targetIdx, 0, removedCategory);
-
-            // 保存数据并更新UI
-            saveData();
-
-            // 获取当前活动的分类
-            const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
-            const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '全部';
-
-            renderCategories(document.getElementById('category-container'), activeCategory);
-        }
-    }
-
-    // 更新UI
-    function updateUI() {
-        const categoryContainer = document.getElementById('category-container');
-        const itemsContainer = document.getElementById('items-container');
-        const searchInput = document.getElementById('search-input');
-
-        // 获取当前活动的分类
-        const activeCategoryBtn = categoryContainer.querySelector('.category-btn.active');
-        const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '全部';
-
-        // 渲染分类和项目
-        renderCategories(categoryContainer, activeCategory);
-        renderItems(itemsContainer, activeCategory, searchInput.value);
-    }
-
-    // 初始化应用
-    function initApp() {
-        // 加载数据
-        loadData();
-
-        // 创建DOM
-        const domElements = createDOM();
-        const { assistant } = domElements;
-
-        // 根据保存的位置设置侧边栏初始位置
-        if (appData.sidebarPosition === 'left') {
-            assistant.classList.add('left');
-        } else {
-            assistant.classList.remove('left');
-        }
-
-        // 更新UI
-        updateUI();
-
-        // 添加事件监听
-
-        // 分类弹窗事件
-        document.getElementById('save-category').addEventListener('click', saveCategory);
-        document.getElementById('cancel-category').addEventListener('click', hideCategoryModal);
-
-        // 点击遮罩层关闭弹窗
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) {
-                hideEditModal();
-                hideCategoryModal();
-            }
-        });
-
-        // ESC键关闭弹窗
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                hideEditModal();
-                hideCategoryModal();
-            }
-        });
-
-        // 侧边栏控制
-        const toggleBtn = document.getElementById('toggle-btn');
-        const assistantElement = document.getElementById('personal-info-assistant');
-        const titleElement = document.getElementById('assistant-title');
-
-        // 全局变量，用于跟踪侧边栏是否展开
-        let isExpanded = !assistantElement.classList.contains('collapsed');
-
-        // 按钮点击事件 - 现在用于切换左右位置
-        toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            toggleSidebarPosition();
-        });
-
-        // 标题点击事件 - 根据侧边栏状态切换功能
-        titleElement.addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            if (assistantElement.classList.contains('collapsed') && !hasDragged) {
-                expandSidebar(); // 如果已收起，则展开
-            } else {
-                collapseSidebar(); // 如果已展开，则收起
-            }
-        });
-
-        // 整个侧边栏容器的点击事件 - 当处于收起状态时，点击任何位置都能展开
-        assistantElement.addEventListener('click', (e) => {
-            // 只有当侧边栏处于收起状态且点击的不是按钮和标题时才处理
-            if (assistantElement.classList.contains('collapsed') &&
-                !e.target.closest('.control-btn') &&
-                e.target.id !== 'assistant-title' &&
-                !hasDragged) {
-                expandSidebar();
-            }
-        });
-
-        // 检查点击是否在需要排除的元素内
-        function isClickInExcludedElements(target) {
-            // 定义所有需要排除的元素ID
-            const excludedElementIds = [
-                'edit-modal',               // 编辑弹窗
-                'category-modal',           // 分类弹窗
-                'delete-item-modal',         // 删除信息项弹窗
-                'delete-category-modal',    // 删除分类弹窗
-                'rename-category-modal',     // 重命名分类弹窗
-                'context-menu',             // 信息项右键菜单
-                'category-context-menu',    // 分类右键菜单
-                'overlay',                  // 遮罩层
-                'detail-modal',             // 详情弹窗
-            ];
-            
-            // 遍历所有需要排除的元素ID
-            for (const elementId of excludedElementIds) {
-                const element = document.getElementById(elementId);
-                if (element && element.contains(target)) {
-                    return true;
-                }
-                if (target.closest(`#${elementId}`)) {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
-
-        // 添加文档点击事件，实现点击侧边栏外部自动最小化功能
-        document.addEventListener('click', (e) => {
-            const assistant = document.getElementById('personal-info-assistant');
-            // 检查点击是否在侧边栏外部，侧边栏是否展开，以及侧边栏是否处于非固定状态
-            // 使用专用函数检查是否需要排除的元素
-            if (!assistant.contains(e.target) &&
-                isExpanded &&
-                !appData.isFixed &&
-                !isClickInExcludedElements(e.target)) {
-                collapseSidebar();
-            }
-        });
-
-        // 切换侧边栏左右位置
-        function toggleSidebarPosition() {
-            const currentAssistant = document.getElementById('personal-info-assistant');
-
-            // 切换左右位置类
-            if (currentAssistant.classList.contains('left')) {
-                currentAssistant.classList.remove('left');
-                toggleBtn.textContent = '◀'; // 右箭头表示可以移到左边
-                toggleBtn.title = '移到左侧'; // 更新title属性与图标状态匹配
-                appData.sidebarPosition = 'right'; // 更新位置状态
-            } else {
-                currentAssistant.classList.add('left');
-                toggleBtn.textContent = '▶'; // 左箭头表示可以移到右边
-                toggleBtn.title = '移到右侧'; // 更新title属性与图标状态匹配
-                appData.sidebarPosition = 'left'; // 更新位置状态
-            }
-
-            saveData(); // 保存位置状态
-        }
-
-        // 展开侧边栏
-        function expandSidebar() {
-            const currentAssistant = document.getElementById('personal-info-assistant');
-
-            currentAssistant.classList.remove('collapsed');
-            currentAssistant.classList.add('open');
-            isExpanded = true;
-        }
-
-        // 收起侧边栏
-        function collapseSidebar() {
-            const currentAssistant = document.getElementById('personal-info-assistant');
-
-            currentAssistant.classList.remove('open');
-            currentAssistant.classList.add('collapsed');
-            isExpanded = false;
-        }
-
-        // 最小化状态下的高度拖拽功能
-        let isDragging = false;
-        let dragStartY = 0;
-        let dragStartTop = 0;
-        let longPressTimer = null;
-        let hasDragged = false;
-
-        // 为侧边栏添加拖拽事件监听
-        assistantElement.addEventListener('mousedown', (e) => {
-            // 只在最小化状态下触发拖拽功能
-            if (assistantElement.classList.contains('collapsed')) {
-                // 阻止默认行为，防止文本选择
-                e.preventDefault();
-                
-                // 添加拖拽准备状态样式
-                assistantElement.classList.add('drag-ready');
-                
-                // 设置长按计时器（300ms，更短的响应时间）
-                longPressTimer = setTimeout(() => {
-                    startDrag(e);
-                }, 300);
-                
-                // 标记为未拖拽状态
-                hasDragged = false;
-            }
-        });
-
-        // 鼠标移动事件
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                handleDrag(e);
-            }
-        });
-
-        // 鼠标释放事件
-        document.addEventListener('mouseup', (e) => {
-            // 移除拖拽准备状态样式
-            assistantElement.classList.remove('drag-ready');
-            
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-            
-            if (isDragging) {
-                endDrag(e);
-            }
-        });
-
-        // 开始拖拽
-        function startDrag(e) {
-            isDragging = true;
-            hasDragged = true;
-            dragStartY = e.clientY;
-            // 获取当前侧边栏的位置
-            const computedStyle = window.getComputedStyle(assistantElement);
-            dragStartTop = parseFloat(computedStyle.top) || 0;
-            
-            // 移除拖拽准备状态样式，添加拖拽中样式
-            assistantElement.classList.remove('drag-ready');
-            assistantElement.classList.add('dragging');
-            
-            // 阻止文本选择和默认行为
-            document.body.style.userSelect = 'none';
-            document.body.style.cursor = 'ns-resize';
-        }
-
-        // 处理拖拽 - 优化性能
-        let lastAnimationFrame = null;
-        let lastDragY = 0;
-        let velocity = 0;
-        let lastTime = 0;
-        
-        function handleDrag(e) {
-            if (!isDragging) return;
-            
-            // 使用requestAnimationFrame优化性能
-            if (lastAnimationFrame) {
-                cancelAnimationFrame(lastAnimationFrame);
-            }
-            
-            lastAnimationFrame = requestAnimationFrame(() => {
-                const currentTime = Date.now();
-                const deltaY = e.clientY - dragStartY;
-                const newTop = dragStartTop + deltaY;
-                
-                // 计算速度（用于惯性效果）
-                if (lastTime > 0) {
-                    const deltaTime = currentTime - lastTime;
-                    if (deltaTime > 0) {
-                        velocity = (deltaY - lastDragY) / deltaTime;
-                    }
-                }
-                lastDragY = deltaY;
-                lastTime = currentTime;
-                
-                // 限制拖拽范围在可视区域内，添加弹性效果
-                const viewportHeight = window.innerHeight;
-                const sidebarHeight = assistantElement.offsetHeight;
-                const minTop = 0;
-                const maxTop = viewportHeight - sidebarHeight;
-                
-                let clampedTop = Math.max(minTop, Math.min(maxTop, newTop));
-                
-                // 添加边界弹性效果
-                if (newTop < minTop) {
-                    const overshoot = minTop - newTop;
-                    clampedTop = minTop - Math.min(overshoot * 0.3, 20);
-                } else if (newTop > maxTop) {
-                    const overshoot = newTop - maxTop;
-                    clampedTop = maxTop + Math.min(overshoot * 0.3, 20);
-                }
-                
-                // 应用新的位置 - 使用CSS变量来存储拖拽位置，这样不会影响展开状态的样式
-                assistantElement.style.setProperty('--collapsed-top', clampedTop + 'px');
-            });
-        }
-
-        // 结束拖拽
-        function endDrag(e) {
-            isDragging = false;
-            
-            // 清除动画帧
-            if (lastAnimationFrame) {
-                cancelAnimationFrame(lastAnimationFrame);
-                lastAnimationFrame = null;
-            }
-            
-            // 移除拖拽样式，添加平滑过渡
-            setTimeout(() => {
-                assistantElement.classList.remove('dragging');
-            }, 10);
-            
-            // 恢复文本选择和光标
-            document.body.style.userSelect = '';
-            document.body.style.cursor = '';
-            
-            // 只有在最小化状态下才保存位置到本地存储
-            if (assistantElement.classList.contains('collapsed')) {
-                const currentTop = parseFloat(assistantElement.style.getPropertyValue('--collapsed-top')) || 0;
-                
-                appData.collapsedPosition = {
-                    top: currentTop
-                };
-                saveData();
-            }
-            
-            // 重置速度计算
-            lastDragY = 0;
-            velocity = 0;
-            lastTime = 0;
-        }
-
-        // 恢复保存的位置
-        function restoreCollapsedPosition() {
-            if (appData.collapsedPosition && assistantElement.classList.contains('collapsed')) {
-                const { top } = appData.collapsedPosition;
-                
-                // 验证位置是否在可视区域内
-                const viewportHeight = window.innerHeight;
-                const sidebarHeight = assistantElement.offsetHeight;
-                const minTop = 0;
-                const maxTop = viewportHeight - sidebarHeight;
-                
-                const validTop = Math.max(minTop, Math.min(maxTop, parseInt(top) || viewportHeight / 2 - sidebarHeight / 2));
-                
-                // 使用CSS变量恢复位置，不修改展开状态的样式
-                assistantElement.style.setProperty('--collapsed-top', validTop + 'px');
-            }
-        }
-
-        // 窗口大小变化时重新计算位置
-        window.addEventListener('resize', () => {
-            if (assistantElement.classList.contains('collapsed')) {
-                restoreCollapsedPosition();
-            }
-        });
-
-        // 初始化时恢复位置
-        restoreCollapsedPosition();
-
-        document.getElementById('fix-btn').addEventListener('click', () => {
-            assistant.classList.toggle('isFixed');
-            const isFixed = assistant.classList.contains('isFixed');
-            document.getElementById('fix-btn').textContent = isFixed ? '🔒' : '🔓';
-            document.getElementById('fix-btn').title = isFixed ? '固定' : '取消固定';
-            appData.isFixed = isFixed;
-            saveData();
-        });
-        
-        // 关闭按钮点击事件
-        document.getElementById('close-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            collapseSidebar();
-        });
-
-        // 分类切换
-        document.getElementById('category-container').addEventListener('click', (e) => {
-            hideContextMenu();
-            hideCategoryContextMenu();
-            e.stopPropagation(); // 阻止事件冒泡，防止点击分类区域被误判为外部点击
-            if (e.target.classList.contains('category-btn')) {
-                const category = e.target.dataset.category;
-                renderCategories(document.getElementById('category-container'), category);
-                renderItems(document.getElementById('items-container'), category, document.getElementById('search-input').value);
-            } else if (e.target.id === 'add-category') {
-                addCategory();
-            }
-        });
-
-        // 分类拖拽排序功能
-        let draggedCategoryBtn = null;
-        let currentOverCategoryBtn = null;
-
-        const categoryContainer = document.getElementById('category-container');
-
-        // 分类拖拽开始事件
-        categoryContainer.addEventListener('dragstart', (e) => {
-            const item = e.target.closest('.category-btn');
-            if (item && item.dataset.category !== '全部') {
-                e.stopPropagation();
-                draggedCategoryBtn = item;
-
-                // 立即添加拖拽样式
-                item.classList.add('dragging');
-
-                // 设置拖拽效果类型为移动
-                e.dataTransfer.effectAllowed = 'move';
-            }
-        });
-
-        // 分类拖拽结束事件
-        categoryContainer.addEventListener('dragend', (e) => {
-            const item = e.target.closest('.category-btn');
-            if (item) {
-                item.classList.remove('dragging');
-            }
-
-            // 清除所有可能残留的样式
-            if (currentOverCategoryBtn) {
-                currentOverCategoryBtn.style.borderTop = 'none';
-                currentOverCategoryBtn = null;
-            }
-
-            draggedCategoryBtn = null;
-        });
-
-        // 分类拖拽悬停事件
-        categoryContainer.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            // 设置拖拽操作效果
-            e.dataTransfer.dropEffect = 'move';
-        });
-
-        // 分类拖拽进入事件
-        categoryContainer.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            // 确保不处理子元素的事件
-            const item = e.target.closest('.category-btn');
-            if (item && item !== draggedCategoryBtn && item !== currentOverCategoryBtn && item.dataset.category !== '全部') {
-                // 清除之前元素的样式
-                if (currentOverCategoryBtn) {
-                    currentOverCategoryBtn.style.borderTop = 'none';
-                }
-
-                // 设置当前元素样式
-                currentOverCategoryBtn = item;
-                currentOverCategoryBtn.style.borderTop = '2px solid #4CAF50';
-            }
-        });
-
-        // 分类拖拽离开事件
-        categoryContainer.addEventListener('dragleave', (e) => {
-            // 检查是否真正离开了元素
-            const item = e.target.closest('.category-btn');
-            if (item && currentOverCategoryBtn === item) {
-                // 检查是否只是移动到了子元素上
-                const relatedTarget = e.relatedTarget;
-                if (!item.contains(relatedTarget)) {
-                    item.style.borderTop = 'none';
-                    currentOverCategoryBtn = null;
-                }
-            }
-        });
-
-        // 分类拖拽放置事件
-        categoryContainer.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const item = e.target.closest('.category-btn');
-            if (item && item !== draggedCategoryBtn && item.dataset.category !== '全部' && draggedCategoryBtn) {
-                // 清除所有样式
-                if (currentOverCategoryBtn) {
-                    currentOverCategoryBtn.style.borderTop = 'none';
-                }
-
-                // 更新分类顺序
-                const draggedCategory = draggedCategoryBtn.dataset.category;
-                const targetCategory = item.dataset.category;
-                updateCategoryOrder(draggedCategory, targetCategory);
-            }
-
-            // 重置状态
-            currentOverCategoryBtn = null;
-        });
-
-        // 搜索功能
-        document.getElementById('search-input').addEventListener('input', (e) => {
-            const searchTerm = e.target.value;
-            const activeCategoryBtn = document.getElementById('category-container').querySelector('.category-btn.active');
-            const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : '全部';
-            renderItems(document.getElementById('items-container'), activeCategory, searchTerm);
-        });
-
-        // 添加信息
-        document.getElementById('add-item-btn').addEventListener('click', () => {
-            showEditModal();
-        });
-
-        // 右键菜单
-        document.getElementById('overlay').addEventListener('click', hideContextMenu);
-
-        document.getElementById('items-container').addEventListener('contextmenu', (e) => {
-            hideContextMenu();
-            hideCategoryContextMenu();
-            if (e.target.closest('.info-item')) {
-                e.preventDefault();
-                // e.stopPropagation();
-                const itemId = e.target.closest('.info-item').dataset.id;
-                showContextMenu(e, itemId);
-            }
-        });
-
-        // 条目右键菜单项编辑按钮点击事件绑定
-        document.getElementById('edit-item').addEventListener('click', () => {
-            const itemId = document.getElementById('context-menu').dataset.itemId;
-            if (itemId) {
-                hideContextMenu();
-                showEditModal(itemId);
-            }
-        });
-
-        // 确保条目右键菜单在点击其他区域时关闭
-        // document.addEventListener('click', (e) => {
-        //     hideContextMenu();
-        //     const contextMenu = document.getElementById('context-menu');
-        //     if (contextMenu && !contextMenu.contains(e.target)) {
-        //         hideContextMenu();
-        //     }
-        // });
-
-        document.getElementById('delete-item').addEventListener('click', () => {
-            const itemId = document.getElementById('context-menu').dataset.itemId;
-            hideContextMenu();
-            deleteItem(itemId);
-        });
-        // 编辑弹窗操作
-        document.getElementById('cancel-edit').addEventListener('click', hideEditModal);
-        document.getElementById('save-edit').addEventListener('click', saveItem);
-        document.getElementById('overlay').addEventListener('click', hideEditModal);
-
-        // 分类右键菜单
-        document.getElementById('category-container').addEventListener('contextmenu', (e) => {
-            hideContextMenu();
-            hideCategoryContextMenu();
-            if (e.target.closest('.category-btn')) {
-                e.preventDefault();
-                // e.stopPropagation();
-                const categoryName = e.target.closest('.category-btn').dataset.category;
-                showCategoryContextMenu(e, categoryName);
-            }
-        });
-        // 分类右键菜单项点击
-        document.getElementById('rename-category').addEventListener('click', () => {
-            const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
-            hideCategoryContextMenu();
-            if (categoryName && categoryName !== '全部') {
-                editCategory(categoryName);
-            }
-        });
-
-        document.getElementById('delete-category-menu').addEventListener('click', () => {
-            const categoryName = document.getElementById('category-context-menu').dataset.categoryName;
-            hideCategoryContextMenu();
-            if (categoryName && categoryName !== '全部') {
-                deleteCategory(categoryName);
-            }
-        });
-
-        // 确保分类右键菜单在点击其他区域时关闭
-        document.addEventListener('click', (e) => {
-            hideContextMenu();
-            hideCategoryContextMenu();
-            // const categoryContextMenu = document.getElementById('category-context-menu');
-            // if (categoryContextMenu && !categoryContextMenu.contains(e.target)) {
-            //     hideCategoryContextMenu();
-            // }
-        });
-
-        // 点击遮罩层关闭分类右键菜单
-        document.getElementById('overlay').addEventListener('click', hideCategoryContextMenu);
-
-
-
-///////////////////////////////////////////////// 信息项事件监听器 开始 ///////////////////////////////////////////////////
-        // 初始化 items 相关变量
-        const itemsContainer = document.getElementById('items-container');
-        let lastClickedItemContent = null; // 存储最近点击的项目内容
-        let autoFillTimeout = null; // 存储自动填充的定时器ID
-        // 添加Ctrl+鼠标悬浮显示详情的功能
-        let hoverTimer = null;
-        let isMouseOver = false;
-        // 保存当前鼠标悬浮的元素，用于在全局键盘事件中作为 startHoverTimer 参数
-        let currentHoveredItem = null;
-        // 创建详情弹窗
-        function createDetailModal() {
-            // 检查是否已存在详情弹窗
-            let detailModal = document.getElementById("detail-modal");
-            if (!detailModal) {
-                detailModal = document.createElement("div");
-                detailModal.id = "detail-modal";
-                detailModal.innerHTML = `
-                    <div class="modal-title" id="detail-title"></div>
-                    <div class="info-field">
-                        <div class="field-label">分类</div>
-                        <div class="field-value" id="detail-category"></div>
-                    </div>
-                    <div class="info-field">
-                        <div class="field-label">日期范围</div>
-                        <div class="field-value" id="detail-date"></div>
-                    </div>
-                    <div class="info-field">
-                        <div class="field-label">内容</div>
-                        <div class="field-value content" id="detail-content"></div>
-                    </div>
-                `;
-                document.body.appendChild(detailModal);
-            }
-            return detailModal;
-        }
-        // 显示详情弹窗
-        function showDetailModal(item) {
-            const detailModal = createDetailModal();
-            
-            // 填充详情内容
-            document.getElementById("detail-title").textContent = item.title;
-            document.getElementById("detail-category").textContent = item.category;
-            
-            // 设置日期范围
-            const dateElement = document.getElementById("detail-date");
-            if (item.startDate || item.endDate) {
-                dateElement.textContent = item.startDate && item.endDate 
-                    ? `${item.startDate} - ${item.endDate}` 
-                    : (item.startDate || item.endDate);
-                dateElement.style.display = "block";
-            } else {
-                dateElement.style.display = "none";
-            }
-            
-            document.getElementById("detail-content").textContent = item.content;
-            
-            // 显示弹窗
-            detailModal.style.display = "block";
-        }
-        // 隐藏详情弹窗
-        function hideDetailModal() {
-            const detailModal = document.getElementById("detail-modal");
-            if (detailModal) {
-                detailModal.style.display = "none";
-            }
-        }
-
-        // 启动计时器的函数
-        function startHoverTimer(item) {
-            // 清除现有定时器
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-            }
-            // 因为showDetailModal需要完整的item对象而不仅仅是dataset
-            // dataset只包含HTML元素上的数据属性，而showDetailModal函数需要title、category等完整信息
-            if (item && item.dataset && item.dataset.id) {
-                // 设置1秒定时器
-                hoverTimer = setTimeout(() => {
-                    // 从appData中获取完整的item数据而不是仅使用dataset
-                    const fullItem = appData.items.find(i => i.id === item.dataset.id);
-                    if (fullItem) {
-                        showDetailModal(fullItem);
-                    }
-                }, 1500);
-            }
-        }
-
-        // 全局键盘事件监听 - 当鼠标悬浮在任意元素上按下Ctrl键时触发
-        document.addEventListener("keydown", function(e) {
-            // 检查是否有元素被悬浮且按下了Ctrl键
-            if (isMouseOver && currentHoveredItem && (e.key === "Control" || e.key === "Ctrl")) {
-                startHoverTimer(currentHoveredItem);
-            }
-        });
-        // 全局键盘事件监听 - 当鼠标悬浮在任意元素上释放Ctrl键时触发
-        document.addEventListener("keyup", function(e) {
-            // 检查是否有元素被悬浮且释放了Ctrl键
-            if (isMouseOver && currentHoveredItem && (e.key === "Control" || e.key === "Ctrl")) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-                hideDetailModal();
-            }
-        });
-
-        // 处理鼠标进入事件
-        function handleItemMouseEnter(e) {
-                isMouseOver = true;
-                // 保存当前悬浮的元素引用
-                currentHoveredItem = this;
-                // 如果此时按住了Ctrl键，启动计时
-                if (e.ctrlKey) {
-                    startHoverTimer(this);
-                }
-        }
-        // 鼠标移动事件 - 处理悬浮期间Ctrl键状态变化
-        function handleItemMouseMove(e) {
-            if (hoverTimer && !e.ctrlKey) {
-                // 释放了Ctrl键，清除定时器
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-                hideDetailModal();
-            } else if (!hoverTimer && e.ctrlKey) {
-                // 按下了Ctrl键，启动计时
-                startHoverTimer(this);
-            }
-        }
-        // 处理鼠标离开事件
-        function handleItemMouseLeave() {
-            isMouseOver = false;
-            // 清除当前悬浮元素引用
-            currentHoveredItem = null;
-            // 清除定时器
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-            }
-            // 隐藏详情弹窗
-            hideDetailModal();
-        }
-        // 侧边栏中的信息项内容完全不可选择
-        function addAntiSelectStyles() {
-            const style = document.createElement('style');
-            style.textContent = `
-                /* 彻底禁用整个侧边栏的文本选择 */
-                #personal-info-assistant,
-                #personal-info-assistant *,
-                #personal-info-assistant *:before,
-                #personal-info-assistant *:after {
-                    user-select: none !important;
-                    -webkit-user-select: none !important;
-                    -moz-user-select: none !important;
-                    -ms-user-select: none !important;
-                    -webkit-touch-callout: none !important;
-                    -webkit-tap-highlight-color: transparent !important;
-                    cursor: default !important;
-                }
-
-                /* 特殊处理按钮和可点击元素 */
-                #personal-info-assistant button,
-                #personal-info-assistant .info-item,
-                #personal-info-assistant .category-btn {
-                    cursor: pointer !important;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-
-        addAntiSelectStyles();
-        // 处理信息项点击事件
-        function handleItemClick(event) {
-            // 检查右键菜单是否可见，如果可见则不执行填充功能
-            const contextMenu = document.getElementById('context-menu');
-            if (contextMenu && contextMenu.style.display === 'block') {
-                return;
-            }
-
-            const itemId = this.dataset.id;
-            const item = appData.items.find(i => i.id === itemId);
-
-            if (item) {
-                // 检查是否按下Shift键和Ctrl键
-                const isShiftPressed = event.shiftKey;
-                const isCtrlPressed = event.ctrlKey;
-
-                // 复制到剪贴板的功能
-                const copyToClipboard = (text) => {
-                    navigator.clipboard.writeText(text).then(() => {
-                        console.log('[Clipboard Debug] 成功复制到剪贴板:', text);
-                        // 可以在这里添加一个临时提示
-                    }).catch(err => {
-                        console.error('[Clipboard Debug] 复制失败:', err);
-                    });
-                };
-
-                // Shift+Ctrl组合键：复制标题到剪贴板
-                if (isShiftPressed && isCtrlPressed && item.title) {
-                    console.log('[AutoFill Debug] 按下Shift+Ctrl键点击信息项，标题已复制到剪贴板');
-                    copyToClipboard(item.title);
-                }
-                // Ctrl键单独按下：复制内容到剪贴板
-                else if (!isShiftPressed && isCtrlPressed && item.content) {
-                    console.log('[AutoFill Debug] 按下Ctrl键点击信息项，内容已复制到剪贴板');
-                    copyToClipboard(item.content);
-                }
-                // Shift键单独按下：存储标题用于自动填充
-                else if (isShiftPressed && !isCtrlPressed && item.title) {
-                    console.log('[AutoFill Debug] 按下Shift键点击信息项，标题将在3秒内可自动填充');
-
-                    // 存储点击的项目标题
-                    lastClickedItemContent = item.title;
-                }
-                // 没有修饰键：存储内容用于自动填充
-                else if (!isShiftPressed && !isCtrlPressed && item.content) {
-                    console.log('[AutoFill Debug] 点击信息项，内容将在3秒内可自动填充');
-
-                    // 存储点击的项目内容
-                    lastClickedItemContent = item.content;
-                }
-
-                // 只有在非Ctrl键模式下才设置定时器（自动填充模式）
-                if (!isCtrlPressed) {
-                    // 清除之前的定时器
-                    if (autoFillTimeout) {
-                        clearTimeout(autoFillTimeout);
-                    }
-
-                    // 设置3秒后清除内容
-                    autoFillTimeout = setTimeout(() => {
-                        lastClickedItemContent = null;
-                        console.log('[AutoFill Debug] 自动填充超时，已清除缓存的内容');
-                    }, 3000);
-                }
-            }
-        }
-
-        // 设置信息项事件监听器
-        function setupItemEvents() {
-            // 移除旧的事件监听器
-            const infoItems = itemsContainer.querySelectorAll('.info-item');
-
-            // 为每个item添加事件监听器
-            infoItems.forEach(item => {
-                // 移除可能存在的旧监听器
-                const newItem = item.cloneNode(true);
-                item.parentNode.replaceChild(newItem, item);
-                
-                newItem.addEventListener('mouseenter', (event) => handleItemMouseEnter.call(newItem, event));
-                newItem.addEventListener('mousemove', (event) => handleItemMouseMove.call(newItem, event));
-                newItem.addEventListener('mouseleave', (event) => handleItemMouseLeave.call(newItem, event));
-                newItem.addEventListener('click', (event) => handleItemClick.call(newItem, event)); // 添加点击事件监听，传递事件对象
-            });
-        }
-        // 首次加载时设置事件监听器
-        setupItemEvents();
-/////////////////////////////////////////////////// 信息项事件监听器 结束 ///////////////////////////////////////////////////
-
-/////////////////////////////////////////////////// items-container 拖拽排序功能 开始 ///////////////////////////////////////////////////
-        let draggedItem = null;
-        let currentOverItem = null;
-
-        // 为所有info-item添加draggable属性
-        function ensureItemsDraggable() {
-            const items = document.querySelectorAll('.info-item:not([draggable="true"])');
-            items.forEach(item => {
-                item.setAttribute('draggable', 'true');
-                // 设置CSS光标样式以提升视觉反馈
-                item.style.cursor = 'grab';
-            });
-        }
-
-        // 初始化时确保可拖拽性
-        ensureItemsDraggable();
-
-        // 优化的拖拽开始事件
-        document.getElementById('items-container').addEventListener('dragstart', (e) => {
-            // 使用closest确保即使点击了子元素也能正确识别
-            const item = e.target.closest('.info-item');
-            if (item) {
-                e.stopPropagation();
-                draggedItem = item;
-
-                // 立即添加拖拽样式，不使用setTimeout避免延迟
-                item.classList.add('dragging');
-
-                // 设置拖拽效果类型为移动
-                e.dataTransfer.effectAllowed = 'move';
-
-                // 创建一个轻量级的拖拽图像以提高性能
-                const dragImage = document.createElement('div');
-                dragImage.textContent = item.textContent.trim();
-                dragImage.style.opacity = '0.8';
-                dragImage.style.backgroundColor = '#fff';
-                dragImage.style.border = '1px solid #ddd';
-                dragImage.style.padding = '8px';
-                dragImage.style.borderRadius = '4px';
-                dragImage.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-                document.body.appendChild(dragImage);
-
-                // 设置自定义拖拽图像
-                e.dataTransfer.setDragImage(dragImage, 20, 20);
-
-                // 拖拽结束后移除临时元素
-                setTimeout(() => document.body.removeChild(dragImage), 0);
-            }
-        });
-
-        // 优化的拖拽结束事件
-        document.getElementById('items-container').addEventListener('dragend', (e) => {
-            const item = e.target.closest('.info-item');
-            if (item) {
-                item.classList.remove('dragging');
-                item.style.cursor = 'grab';
-            }
-
-            // 清除所有可能残留的样式
-            if (currentOverItem) {
-                currentOverItem.style.borderTop = 'none';
-                currentOverItem = null;
-            }
-
-            draggedItem = null;
-        });
-
-        // 优化的拖拽悬停事件
-        document.getElementById('items-container').addEventListener('dragover', (e) => {
-            e.preventDefault();
-            // 设置拖拽操作效果
-            e.dataTransfer.dropEffect = 'move';
-        });
-
-        // 优化的拖拽进入事件
-        document.getElementById('items-container').addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            // 确保不处理子元素的事件
-            const item = e.target.closest('.info-item');
-            if (item && item !== draggedItem && item !== currentOverItem) {
-                // 清除之前元素的样式
-                if (currentOverItem) {
-                    currentOverItem.style.borderTop = 'none';
-                }
-
-                // 设置当前元素样式
-                currentOverItem = item;
-                currentOverItem.style.borderTop = '2px solid #4CAF50';
-            }
-        });
-
-        // 优化的拖拽离开事件
-        document.getElementById('items-container').addEventListener('dragleave', (e) => {
-            // 检查是否真正离开了元素
-            const item = e.target.closest('.info-item');
-            if (item && currentOverItem === item) {
-                // 检查是否只是移动到了子元素上
-                const relatedTarget = e.relatedTarget;
-                if (!item.contains(relatedTarget)) {
-                    item.style.borderTop = 'none';
-                    currentOverItem = null;
-                }
-            }
-        });
-
-        // 优化的放置事件
-        document.getElementById('items-container').addEventListener('drop', (e) => {
-            e.preventDefault();
-            const item = e.target.closest('.info-item');
-            if (item && item !== draggedItem) {
-                // 清除所有样式
-                if (currentOverItem) {
-                    currentOverItem.style.borderTop = 'none';
-                }
-
-                // 立即响应，不添加额外延迟
-                const draggedId = draggedItem.dataset.id;
-                const targetId = item.dataset.id;
-                updateItemOrder(draggedId, targetId);
-            }
-
-            // 重置状态
-            currentOverItem = null;
-        });
-/////////////////////////////////////////////////// items-container 拖拽排序功能 结束 ///////////////////////////////////////////////////
-
-/////////////////////////////////////////////////// 增加 renderItems 功能 开始 ///////////////////////////////////////////////////
-        // 在渲染完项目后确保可拖拽性以及设置事件监听器
-        const originalRenderItemsForDrag = renderItems;
-        renderItems = function (container, filterCategory, searchTerm) {
-            originalRenderItemsForDrag(container, filterCategory, searchTerm);
-            setupItemEvents();
-            ensureItemsDraggable();
-        };
-/////////////////////////////////////////////////// 增加 renderItems 功能 结束 ///////////////////////////////////////////////////
-        /**
-         * 给 TinyMCE editor 绑定事件监听器
-         */
-        function bindEditorEvents(editor) {
-            if (!editor || editor._tampermonkeyBound) return; // 避免重复绑定
-            editor._tampermonkeyBound = true;
-
-            console.log("[TinyMCE] 绑定事件:", editor.id);
-
-            // // TinyMCE API 层事件
-            // editor.on('click', (e) => {
-            //     console.log(`[TinyMCE API] [${editor.id}] click:`, e);
-            // });
-            // editor.on('keyup', (e) => {
-            //     console.log(`[TinyMCE API] [${editor.id}] keyup:`, e.key);
-            // });
-            // editor.on('change', () => {
-            //     console.log(`[TinyMCE API] [${editor.id}] content changed:`, editor.getContent());
-            // });
-
-            // 监听 iframe 内部 DOM
-            editor.on('init', () => {
-                const iframe = editor.iframeElement;
-                if (iframe && iframe.contentDocument) {
-                    const doc = iframe.contentDocument;
-
-                    doc.addEventListener('click', (e) => {
-                        editor.setContent(lastClickedItemContent);
-                        // simulateInputAtCursor(lastClickedItemContent);
-                        console.log(`[TinyMCE DOM] [${editor.id}] Clicked:`, e.target);
-                    });
-
-                    // doc.addEventListener('input', (e) => {
-                    //     console.log(`[TinyMCE DOM] [${editor.id}] Input:`, e.target.textContent);
-                    // });
-
-                    console.log(`[TinyMCE] DOM 监听已挂载 -> ${editor.id}`);
-                }
-            });
-        }
-
-        /**
-         * 检查并绑定所有已存在的 TinyMCE 实例
-         * @returns {boolean} 是否绑定到了新的 editor
-         */
-        function checkEditorsAndReturnBound() {
-            let bound = false;
-            if (unsafeWindow.tinymce && unsafeWindow.tinymce.editors && unsafeWindow.tinymce.editors.length > 0) {
-                unsafeWindow.tinymce.editors.forEach(editor => {
-                    if (editor && !editor.destroyed && !editor._tampermonkeyBound) {
-                        bindEditorEvents(editor);
-                        bound = true; // ✅ 标记有新的 editor 被绑定
-                    }
-                });
-            }
-            console.log('bound:', bound);
-            return bound;
-        }
-
-        /**
-         * 当 DOM 变化时，启动短期轮询，最多 2 秒，每 200ms 检查一次
-         * 一旦发现并绑定成功，就立即退出
-         */
-        function startShortPolling() {
-            let elapsed = 0;
-            const interval = setInterval(() => {
-                if (checkEditorsAndReturnBound()) {  // ✅ 如果发现新 editor 并绑定，就退出
-                    clearInterval(interval);
-                    return;
-                }
-                elapsed += 200;
-                if (elapsed >= 2000) { // 最多 2s
-                    clearInterval(interval);
-                }
-            }, 200);
-        }
-
-        /**
-         * 使用 MutationObserver 监听 DOM 变化
-         */
-        function observeForEditors() {
-            const observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.addedNodes.length > 0) {
-                        // 当有新节点加入时，触发一次短期轮询
-                        startShortPolling();
-                        break;
-                    }
-                }
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        }
-
-        /**
-         * 主入口
-         */
-        function tinyMCEInit() {
-            // 先检查一次已有实例
-            checkEditorsAndReturnBound();
-            // 开启 DOM 监听
-            observeForEditors();
-            console.log("[TinyMCE] 事件监听初始化完成 (Observer + 短轮询).");
-        }
-
-        tinyMCEInit();
-
-        // 添加全局输入框点击监听，用于自动填充内容
-        document.addEventListener('mouseup', (e) => {
-            console.log('[AutoFill Debug] 点击事件触发');
-
-            // 执行自动填充
-            if (lastClickedItemContent) {
-                console.log('[AutoFill Debug] 执行自动填充');
-
-                // 使用模拟用户输入的方式填充内容
-                simulateInputAtCursor(lastClickedItemContent);
-                // 清除缓存的内容，避免重复填充
-                lastClickedItemContent = null;
-                if (autoFillTimeout) {
-                    clearTimeout(autoFillTimeout);
-                    autoFillTimeout = null;
-                }
-            }
-        });
-
-        // 模拟执行粘贴，尝试所有的可能方式，每0.3秒钟检查一次是否有可输入的焦点元素，持续3s
-        function simulateInputAtCursor(message) {
-            const maxWaitTime = 3000; // 最大等待时间（毫秒）
-            const checkInterval = 300; // 检查间隔（毫秒）
-
+        },
+
+        simulateInputAtCursor: function(message) {
+            const maxWaitTime = Config.TIMERS.SIMULATE_INPUT_TIMEOUT;
+            const checkInterval = Config.TIMERS.SIMULATE_INPUT_INTERVAL;
             let attempts = 0;
+
             const interval = setInterval(() => {
                 const activeElement = document.activeElement;
 
@@ -2481,7 +749,6 @@
                             console.warn('方式一失败，尝试其他方法');
                         }
                     }
-                    
 
                     // 方式二：现代API setRangeText（仅限 input/textarea）
                     if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
@@ -2517,74 +784,1654 @@
                             console.error('方式三失败');
                         }
                     }
-                    // 备用方法1: 使用Clipboard API
-                    const clipboardData = new DataTransfer();
-                    clipboardData.setData('text/plain', message);
-
-                    const pasteEvent = new ClipboardEvent('paste', {
-                        bubbles: true,
-                        cancelable: true,
-                        clipboardData
-                    });
-
-                    activeElement.dispatchEvent(pasteEvent);
-                    console.log("尝试模拟触发粘贴事件，但不知道是否成功。。。，建议直接用Ctrl+单击复制内容，然后手动粘贴");
-                    return;
+                    
+                    // 备用方法: 模拟粘贴事件
+                    try {
+                        const clipboardData = new DataTransfer();
+                        clipboardData.setData('text/plain', message);
+                        const pasteEvent = new ClipboardEvent('paste', {
+                            bubbles: true,
+                            cancelable: true,
+                            clipboardData
+                        });
+                        activeElement.dispatchEvent(pasteEvent);
+                        console.log("尝试模拟触发粘贴事件");
+                        return;
+                    } catch(e) {
+                         console.error('模拟粘贴事件失败');
+                    }
 
                 } else {
-                    // 如果还没有超过最大等待时间，继续检查
                     attempts++;
                     if (attempts * checkInterval >= maxWaitTime) {
-                        // 超过最大等待时间，停止查找并打印错误信息
                         clearInterval(interval);
-                        console.error('在3秒内未找到可输入的焦点元素，放弃执行粘贴动作。');
+                        console.error(`在${maxWaitTime / 1000}秒内未找到可输入的焦点元素，放弃执行粘贴动作。`);
                     }
                 }
             }, checkInterval);
         }
+    };
 
-        // 快捷键
-        document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'l' && e.altKey && e.shiftKey) {
-                e.preventDefault();
+    /**
+     * ----------------------------------------------------------------
+     * 模块: State
+     * 管理应用所有内存中的动态数据
+     * ----------------------------------------------------------------
+     */
+    const State = {
+        // 持久化数据
+        data: {
+            isFixed: true,
+            sidebarPosition: 'right', // 'left' or 'right'
+            collapsedPosition: null,  // { top: number }
+            categories: ['工作', '学习', '生活'],
+            items: [
+                {
+                    title: '示例信息',
+                    content: '这是一条示例信息，您可以编辑或删除它。',
+                    category: '工作',
+                    startDate: '2025-10-03',
+                    endDate: '2025-10-03',
+                    id: Utils.generateId(),
+                    order: 1
+                }
+            ],
+            activeCategory: Config.DEFAULT_CATEGORY,
+        },
+        // 临时 UI 状态
+        ui: {
+            isExpanded: false,
+            isDraggingSidebar: false,
+            sidebarDragStartY: 0,
+            sidebarDragStartTop: 0,
+            sidebarLongPressTimer: null,
+            hasDraggedSidebar: false,
+            lastSidebarDragY: 0,
+            sidebarDragVelocity: 0,
+            lastSidebarDragTime: 0,
+            lastSidebarAnimationFrame: null,
+        },
+        // 自动填充状态
+        autofill: {
+            lastClickedItemContent: null,
+            timeout: null,
+        },
+        // 详情悬停状态
+        hoverDetail: {
+            timer: null,
+            isMouseOver: false,
+            currentItem: null,
+        },
+        // 拖拽状态
+        drag: {
+            draggedItem: null,
+            overItem: null,
+            draggedCategory: null,
+            overCategory: null,
+        }
+    };
 
-                isExpanded = !isExpanded;
-                // 直接通过ID获取assistant元素，确保在任何状态下都能正确访问
-                const currentAssistant = document.getElementById('personal-info-assistant');
+    /**
+     * ----------------------------------------------------------------
+     * 模块: Storage (Model)
+     * 封装 GM API，负责数据的持久化、加载和 CRUD 操作
+     * ----------------------------------------------------------------
+     */
+    const Storage = {
+        initialize: function() {
+            const resetFlag = GM_getValue(Config.STORAGE_KEYS.RESET_FLAG, true);
+            if (resetFlag) {
+                GM_setValue(Config.STORAGE_KEYS.RESET_FLAG, false);
+                // 使用 State 中的默认数据
+                GM_setValue(Config.STORAGE_KEYS.CATEGORIES, State.data.categories);
+                GM_setValue(Config.STORAGE_KEYS.ITEMS, State.data.items);
+                GM_setValue(Config.STORAGE_KEYS.IS_FIXED, State.data.isFixed);
+                GM_setValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, State.data.sidebarPosition);
+                GM_setValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, State.data.collapsedPosition);
+                console.log('个人信息助手存储结构已初始化');
+            }
+        },
 
-                if (isExpanded) {
-                    // 展开侧边栏
-                    currentAssistant.classList.remove('collapsed');
-                    currentAssistant.classList.add('open');
-                } else {
-                    // 收起侧边栏
-                    currentAssistant.classList.remove('open');
-                    currentAssistant.classList.add('collapsed');
+        load: function() {
+            // 兼容旧版
+            const oldFormatData = GM_getValue(Config.STORAGE_KEYS.OLD_DATA, null);
+            if (oldFormatData) {
+                try {
+                    const parsedData = JSON.parse(oldFormatData);
+                    State.data = { ...State.data, ...parsedData };
+                    this.save(); // 迁移到新格式
+                    GM_setValue(Config.STORAGE_KEYS.OLD_DATA, null); // 删除旧数据
+                    console.error('数据已从旧格式迁移到新格式');
+                    return;
+                } catch (e) {
+                    console.error('Failed to parse old format data:', e);
                 }
             }
-        });
 
-        // 初始化侧边栏状态
-        // 默认展开 测试专用
-        // isExpanded = true;
-        // document.getElementById('personal-info-assistant').classList.remove('collapsed');
-        // document.getElementById('personal-info-assistant').classList.add('open');
+            // 加载新格式数据
+            const categories = GM_getValue(Config.STORAGE_KEYS.CATEGORIES, null);
+            const items = GM_getValue(Config.STORAGE_KEYS.ITEMS, null);
+            const isFixed = GM_getValue(Config.STORAGE_KEYS.IS_FIXED, null);
+            const sidebarPosition = GM_getValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, null);
+            const collapsedPosition = GM_getValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, null);
 
-        // 确保应用固定状态
-        // 强制应用appData.isFixed的值，不管之前的状态如何
-        if (appData.isFixed) {
-            document.getElementById('personal-info-assistant').classList.add('isFixed');
-        } else {
-            document.getElementById('personal-info-assistant').classList.remove('isFixed');
+            if (categories) State.data.categories = categories;
+            if (items) State.data.items = items;
+            if (isFixed !== null) State.data.isFixed = isFixed;
+            if (sidebarPosition) State.data.sidebarPosition = sidebarPosition;
+            if (collapsedPosition) State.data.collapsedPosition = collapsedPosition;
+        },
+
+        save: function() {
+            // 格式化 items 确保数据一致性
+            const formattedItems = State.data.items.map(item => ({
+                title: item.title || '',
+                content: item.content || '',
+                category: item.category || Config.DEFAULT_CATEGORY,
+                startDate: item.startDate || '',
+                endDate: item.endDate || '',
+                id: item.id || Utils.generateId(),
+                order: item.order || 1
+            }));
+            State.data.items = formattedItems;
+
+            GM_setValue(Config.STORAGE_KEYS.CATEGORIES, State.data.categories);
+            GM_setValue(Config.STORAGE_KEYS.ITEMS, State.data.items);
+            GM_setValue(Config.STORAGE_KEYS.IS_FIXED, State.data.isFixed);
+            GM_setValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, State.data.sidebarPosition);
+            GM_setValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, State.data.collapsedPosition);
+        },
+
+        saveItem: function(itemData) {
+            if (itemData.id) {
+                // 编辑
+                const index = State.data.items.findIndex(i => i.id === itemData.id);
+                if (index !== -1) {
+                    State.data.items[index] = { ...State.data.items[index], ...itemData };
+                }
+            } else {
+                // 新增
+                const maxOrder = State.data.items.length > 0 ? Math.max(...State.data.items.map(i => i.order)) : 0;
+                State.data.items.push({
+                    ...itemData,
+                    id: Utils.generateId(),
+                    order: maxOrder + 1
+                });
+            }
+            this.save();
+        },
+
+        deleteItemById: function(itemId) {
+            State.data.items = State.data.items.filter(item => item.id !== itemId);
+            this.save();
+        },
+
+        saveCategory: function(categoryName) {
+            if (categoryName && !State.data.categories.includes(categoryName)) {
+                State.data.categories.push(categoryName);
+                this.save();
+                return true;
+            }
+            return false;
+        },
+
+        deleteCategory: function(categoryName, moveItems) {
+            if (moveItems) {
+                // 移动项目到“全部”
+                State.data.items = State.data.items.map(item => {
+                    if (item.category === categoryName) {
+                        return { ...item, category: Config.DEFAULT_CATEGORY };
+                    }
+                    return item;
+                });
+            } else {
+                // 删除分类下的所有项目
+                State.data.items = State.data.items.filter(item => item.category !== categoryName);
+            }
+            // 删除分类
+            State.data.categories = State.data.categories.filter(cat => cat !== categoryName);
+            this.save();
+        },
+
+        renameCategory: function(oldName, newName) {
+            if (!newName || newName === oldName) return false;
+            if (State.data.categories.includes(newName)) {
+                alert('该分类名称已存在');
+                return false;
+            }
+
+            // 更新分类数组
+            const index = State.data.categories.indexOf(oldName);
+            if (index !== -1) {
+                State.data.categories[index] = newName;
+            }
+
+            // 更新所有相关条目
+            State.data.items = State.data.items.map(item => {
+                if (item.category === oldName) {
+                    return { ...item, category: newName };
+                }
+                return item;
+            });
+
+            this.save();
+            return true;
+        },
+
+        updateItemOrder: function(draggedId, targetId) {
+            const items = State.data.items;
+            const draggedItem = items.find(item => item.id === draggedId);
+            const targetItem = items.find(item => item.id === targetId);
+
+            if (draggedItem && targetItem) {
+                items.sort((a, b) => a.order - b.order);
+                const draggedIdx = items.findIndex(item => item.id === draggedId);
+                let targetIdx = items.findIndex(item => item.id === targetId);
+
+                if (draggedIdx !== -1 && targetIdx !== -1) {
+                    const [removedItem] = items.splice(draggedIdx, 1);
+                    // 调整目标索引
+                    targetIdx = items.findIndex(item => item.id === targetId);
+                    items.splice(targetIdx, 0, removedItem);
+                    
+                    // 重新分配 order
+                    items.forEach((item, index) => {
+                        item.order = index + 1;
+                    });
+                    this.save();
+                }
+            }
+        },
+
+        updateCategoryOrder: function(draggedCategory, targetCategory) {
+            if (draggedCategory === Config.DEFAULT_CATEGORY || targetCategory === Config.DEFAULT_CATEGORY) {
+                return;
+            }
+            
+            const categories = State.data.categories;
+            const draggedIdx = categories.indexOf(draggedCategory);
+            const targetIdx = categories.indexOf(targetCategory);
+
+            if (draggedIdx !== -1 && targetIdx !== -1) {
+                const [removedCategory] = categories.splice(draggedIdx, 1);
+                categories.splice(targetIdx, 0, removedCategory);
+                this.save();
+            }
         }
+    };
 
-        // 初始化fix-btn的状态，确保与appData.isFixed保持一致
-        const fixBtn = document.getElementById('fix-btn');
-        fixBtn.textContent = appData.isFixed ? '🔒' : '🔓';
-        fixBtn.title = appData.isFixed ? '点击后取消固定（点击外部不隐藏）' : '点击后固定（点击外部自动隐藏）';
-    }
+    /**
+     * ----------------------------------------------------------------
+     * 模块: DOM (View)
+     * 负责 DOM 的创建、缓存和渲染
+     * ----------------------------------------------------------------
+     */
+    const DOM = {
+        elements: {}, // 缓存 DOM 元素
 
-    // 启动应用
-    initApp();
+        create: function() {
+            const assistant = document.createElement('div');
+            assistant.id = 'personal-info-assistant';
+            assistant.className = Config.CLASSES.COLLAPSED; // 默认收起
+
+            const isLeftSide = State.data.sidebarPosition === 'left';
+            const toggleBtnText = isLeftSide ? '▶' : '◀';
+            const toggleBtnTitle = isLeftSide ? '移到右侧' : '移到左侧';
+
+            assistant.innerHTML = `
+                <div id="assistant-header">
+                    <div id="assistant-title">信息助手</div>
+                    <div id="assistant-controls">
+                        <button class="control-btn" id="toggle-btn" title="${toggleBtnTitle}">${toggleBtnText}</button>
+                        <button class="control-btn" id="fix-btn" title="固定">🔒</button>
+                        <button class="control-btn" id="close-btn" title="点击关闭侧边栏">×</button>
+                    </div>
+                </div>
+                <div id="assistant-content">
+                    <div id="category-container"></div>
+                    <div id="items-container"></div>
+                </div>
+                <div id="assistant-footer">
+                    <input type="text" id="search-input" placeholder="搜索...">
+                    <button id="add-item-btn">+ 添加信息</button>
+                </div>
+            `;
+
+            const contextMenu = document.createElement('div');
+            contextMenu.className = 'context-menu';
+            contextMenu.id = 'context-menu';
+            contextMenu.innerHTML = `
+                <div class="context-menu-item" id="edit-item">编辑</div>
+                <div class="context-menu-item" id="delete-item">删除</div>
+            `;
+
+            const categoryContextMenu = document.createElement('div');
+            categoryContextMenu.className = 'context-menu';
+            categoryContextMenu.id = 'category-context-menu';
+            categoryContextMenu.innerHTML = `
+                <div class="context-menu-item" id="rename-category">重命名</div>
+                <div class="context-menu-item" id="delete-category-menu">删除</div>
+            `;
+
+            const editModal = document.createElement('div');
+            editModal.id = 'edit-modal';
+            editModal.innerHTML = `
+                <div class="modal-title">编辑信息</div>
+                <div class="form-group">
+                    <label for="edit-title">标题</label>
+                    <input type="text" id="edit-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-start-date">开始日期</label>
+                    <input type="date" id="edit-start-date">
+                </div>
+                <div class="form-group">
+                    <label for="edit-end-date">结束日期</label>
+                    <input type="date" id="edit-end-date">
+                </div>
+                <div class="form-group">
+                    <label for="edit-content">内容</label>
+                    <textarea id="edit-content" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-category">分类</label>
+                    <select id="edit-category"></select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-edit">取消</button>
+                    <button class="btn btn-primary" id="save-edit">保存</button>
+            </div>
+            `;
+
+            const categoryModal = document.createElement('div');
+            categoryModal.id = 'category-modal';
+            categoryModal.className = Config.CLASSES.DYNAMIC_MODAL; // 使用通用类
+            categoryModal.style.display = 'none'; // 确保默认隐藏
+            categoryModal.innerHTML = `
+                <div class="modal-title">添加分类</div>
+                <div class="form-group">
+                    <label for="category-name">分类名称</label>
+                    <input type="text" id="category-name" placeholder="请输入分类名称" required>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-category">取消</button>
+                    <button class="btn btn-primary" id="save-category">确定</button>
+            </div>
+            `;
+            
+            // --- 新增：创建所有“动态”模态框 ---
+
+            const detailModal = document.createElement("div");
+            detailModal.id = Config.SELECTORS.DETAIL_MODAL.slice(1);
+            detailModal.className = Config.CLASSES.DYNAMIC_MODAL; // 使用通用类
+            detailModal.innerHTML = `
+                <div class="modal-title" id="detail-title"></div>
+                <div class="info-field">
+                    <div class="field-label">分类</div>
+                    <div class="field-value" id="detail-category"></div>
+                </div>
+                <div class="info-field">
+                    <div class="field-label">日期范围</div>
+                    <div class="field-value" id="detail-date"></div>
+                </div>
+                <div class="info-field">
+                    <div class="field-label">内容</div>
+                    <div class="field-value content" id="detail-content"></div>
+                </div>
+            `;
+
+            const deleteItemModal = document.createElement('div');
+            deleteItemModal.id = Config.SELECTORS.DELETE_ITEM_MODAL.slice(1);
+            deleteItemModal.className = Config.CLASSES.DYNAMIC_MODAL; // 使用通用类
+            deleteItemModal.innerHTML = `
+                <div class="modal-title">删除信息</div>
+                <div style="margin: 20px 0; font-size: 14px; color: #333;">
+                    确定要删除这条信息吗？此操作无法撤销。
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-delete-item">取消</button>
+                    <button class="btn btn-primary" id="confirm-delete-item">确定</button>
+                </div>
+            `;
+
+            const deleteCategoryModal = document.createElement('div');
+            deleteCategoryModal.id = Config.SELECTORS.DELETE_CATEGORY_MODAL.slice(1);
+            deleteCategoryModal.className = Config.CLASSES.DYNAMIC_MODAL; // 使用通用类
+            deleteCategoryModal.innerHTML = `
+                <div class="modal-title">删除分类</div>
+                <div class="delete-category-message" style="margin: 20px 0; font-size: 14px; color: #333;"></div>
+                <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-direction: column;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="radio" name="delete-option" value="move" checked style="margin-right: 8px;">
+                        <span>将该分类下的所有信息移动到“<strong>${Config.DEFAULT_CATEGORY}</strong>”</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="radio" name="delete-option" value="delete" style="margin-right: 8px;">
+                        <span>直接删除该分类下的所有信息</span>
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-delete-category">取消</button>
+                    <button class="btn btn-primary" id="confirm-delete-category">确定</button>
+                </div>
+            `;
+
+            const renameCategoryModal = document.createElement('div');
+            renameCategoryModal.id = Config.SELECTORS.RENAME_CATEGORY_MODAL.slice(1);
+            renameCategoryModal.className = Config.CLASSES.DYNAMIC_MODAL; // 使用通用类
+            renameCategoryModal.innerHTML = `
+                <div class="modal-title">重命名分类</div>
+                <div class="rename-category-message" style="margin: 20px 0; font-size: 14px; color: #333;"></div>
+                <div class="form-group">
+                    <label for="new-category-name">新分类名称</label>
+                    <input type="text" id="new-category-name" required>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-rename-category">取消</button>
+                    <button class="btn btn-primary" id="confirm-rename-category">确定</button>
+                </div>
+            `;
+            
+            // --- 结束：创建所有“动态”模态框 ---
+
+
+            const overlay = document.createElement('div');
+            overlay.id = 'overlay';
+
+            document.body.appendChild(assistant);
+            document.body.appendChild(contextMenu);
+            document.body.appendChild(categoryContextMenu);
+            document.body.appendChild(editModal);
+            document.body.appendChild(categoryModal);
+            document.body.appendChild(overlay);
+            // --- 新增：附加所有“动态”模态框 ---
+            document.body.appendChild(detailModal);
+            document.body.appendChild(deleteItemModal);
+            document.body.appendChild(deleteCategoryModal);
+            document.body.appendChild(renameCategoryModal);
+            // --- 结束：附加所有“动态”模态框 ---
+
+            this.cache(); // 创建后立即缓存
+        },
+
+        cache: function() {
+            // 缓存所有需要频繁访问的 DOM 元素
+            this.elements.assistant = document.querySelector(Config.SELECTORS.ASSISTANT);
+            this.elements.header = document.querySelector(Config.SELECTORS.HEADER);
+            this.elements.title = document.querySelector(Config.SELECTORS.TITLE);
+            this.elements.toggleBtn = document.querySelector(Config.SELECTORS.TOGGLE_BTN);
+            this.elements.fixBtn = document.querySelector(Config.SELECTORS.FIX_BTN);
+            this.elements.closeBtn = document.querySelector(Config.SELECTORS.CLOSE_BTN);
+            this.elements.categoryContainer = document.querySelector(Config.SELECTORS.CATEGORY_CONTAINER);
+            this.elements.itemsContainer = document.querySelector(Config.SELECTORS.ITEMS_CONTAINER);
+            this.elements.searchInput = document.querySelector(Config.SELECTORS.SEARCH_INPUT);
+            this.elements.addItemBtn = document.querySelector(Config.SELECTORS.ADD_ITEM_BTN);
+            this.elements.contextMenu = document.querySelector(Config.SELECTORS.CONTEXT_MENU);
+            this.elements.editItemMenu = document.querySelector(Config.SELECTORS.EDIT_ITEM_MENU);
+            this.elements.deleteItemMenu = document.querySelector(Config.SELECTORS.DELETE_ITEM_MENU);
+            this.elements.categoryContextMenu = document.querySelector(Config.SELECTORS.CATEGORY_CONTEXT_MENU);
+            this.elements.renameCategoryMenu = document.querySelector(Config.SELECTORS.RENAME_CATEGORY_MENU);
+            this.elements.deleteCategoryMenu = document.querySelector(Config.SELECTORS.DELETE_CATEGORY_MENU);
+            this.elements.editModal = document.querySelector(Config.SELECTORS.EDIT_MODAL);
+            this.elements.editTitle = document.querySelector(Config.SELECTORS.EDIT_TITLE);
+            this.elements.editStartDate = document.querySelector(Config.SELECTORS.EDIT_START_DATE);
+            this.elements.editEndDate = document.querySelector(Config.SELECTORS.EDIT_END_DATE);
+            this.elements.editContent = document.querySelector(Config.SELECTORS.EDIT_CONTENT);
+            this.elements.editCategory = document.querySelector(Config.SELECTORS.EDIT_CATEGORY);
+            this.elements.cancelEditBtn = document.querySelector(Config.SELECTORS.CANCEL_EDIT_BTN);
+            this.elements.saveEditBtn = document.querySelector(Config.SELECTORS.SAVE_EDIT_BTN);
+            this.elements.categoryModal = document.querySelector(Config.SELECTORS.CATEGORY_MODAL);
+            this.elements.categoryNameInput = document.querySelector(Config.SELECTORS.CATEGORY_NAME_INPUT);
+            this.elements.cancelCategoryBtn = document.querySelector(Config.SELECTORS.CANCEL_CATEGORY_BTN);
+            this.elements.saveCategoryBtn = document.querySelector(Config.SELECTORS.SAVE_CATEGORY_BTN);
+            this.elements.overlay = document.querySelector(Config.SELECTORS.OVERLAY);
+            
+            // --- 新增：缓存所有“动态”模态框及其内容 ---
+            this.elements.detailModal = document.querySelector(Config.SELECTORS.DETAIL_MODAL);
+            this.elements.detailTitle = document.querySelector(Config.SELECTORS.DETAIL_TITLE);
+            this.elements.detailCategory = document.querySelector(Config.SELECTORS.DETAIL_CATEGORY);
+            this.elements.detailDate = document.querySelector(Config.SELECTORS.DETAIL_DATE);
+            this.elements.detailContent = document.querySelector(Config.SELECTORS.DETAIL_CONTENT);
+
+            this.elements.deleteItemModal = document.querySelector(Config.SELECTORS.DELETE_ITEM_MODAL);
+            this.elements.deleteCategoryModal = document.querySelector(Config.SELECTORS.DELETE_CATEGORY_MODAL);
+            this.elements.renameCategoryModal = document.querySelector(Config.SELECTORS.RENAME_CATEGORY_MODAL);
+            // --- 结束：缓存所有“动态”模态框及其内容 ---
+        },
+
+        renderCategories: function() {
+            const container = this.elements.categoryContainer;
+            if (!container) return;
+            
+            const activeCategory = State.data.activeCategory;
+            container.innerHTML = ''; // 清空
+
+            // 1. 添加 "全部"
+            const allBtn = document.createElement('button');
+            allBtn.className = `${Config.CLASSES.CATEGORY_BTN} ${activeCategory === Config.DEFAULT_CATEGORY ? Config.CLASSES.ACTIVE : ''}`;
+            allBtn.textContent = Config.DEFAULT_CATEGORY;
+            allBtn.dataset.category = Config.DEFAULT_CATEGORY;
+            allBtn.draggable = false;
+            container.appendChild(allBtn);
+
+            // 2. 添加所有自定义分类
+            State.data.categories.forEach(category => {
+                const btn = document.createElement('button');
+                btn.className = `${Config.CLASSES.CATEGORY_BTN} ${activeCategory === category ? Config.CLASSES.ACTIVE : ''}`;
+                btn.textContent = category;
+                btn.dataset.category = category;
+                btn.draggable = true;
+                container.appendChild(btn);
+            });
+
+            // 3. 添加 "添加" 按钮
+            const addBtn = document.createElement('button');
+            addBtn.id = Config.SELECTORS.ADD_CATEGORY_BTN.slice(1); //
+            addBtn.textContent = '+';
+            addBtn.draggable = false;
+            container.appendChild(addBtn);
+        },
+
+        renderItems: function() {
+            const container = this.elements.itemsContainer;
+            if (!container) return;
+
+            const filterCategory = State.data.activeCategory;
+            const searchTerm = this.elements.searchInput ? this.elements.searchInput.value : '';
+            container.innerHTML = ''; // 清空
+
+            let filteredItems = State.data.items.filter(item => {
+                const categoryMatch = filterCategory === Config.DEFAULT_CATEGORY || item.category === filterCategory;
+                const searchMatch = !searchTerm ||
+                    (item.title && item.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (item.content && item.content.toLowerCase().includes(searchTerm.toLowerCase()));
+                return categoryMatch && searchMatch;
+            });
+
+            filteredItems.sort((a, b) => a.order - b.order);
+
+            filteredItems.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = Config.CLASSES.INFO_ITEM; // 修复：直接使用 Config.CLASSES.INFO_ITEM
+                itemEl.dataset.id = item.id;
+                itemEl.draggable = true;
+                itemEl.innerHTML = `
+                    <div class="info-item-header">
+                        <div class="item-category">${item.category}</div>
+                    </div>
+                    <div class="item-title">${item.title}</div>
+                    ${(item.startDate || item.endDate) ? `
+                        <div class="item-date">
+                            ${item.startDate && item.endDate ? `${item.startDate} - ${item.endDate}` : (item.startDate || item.endDate)}
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(itemEl);
+            });
+        },
+
+        update: function() {
+            this.renderCategories();
+            this.renderItems();
+        }
+    };
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: UI (View-State Controller)
+     * 负责 UI 状态管理 (Modals, Menus, Sidebar 状态)
+     * ----------------------------------------------------------------
+     */
+    const UI = {
+        // --- Context Menus ---
+        showContextMenu: function(event, itemId) {
+            const menu = DOM.elements.contextMenu;
+            menu.style.left = `${event.clientX}px`;
+            menu.style.top = `${event.clientY}px`;
+            menu.style.display = 'block';
+            menu.dataset.itemId = itemId;
+        },
+        hideContextMenu: function() {
+            if(DOM.elements.contextMenu) DOM.elements.contextMenu.style.display = 'none';
+        },
+        showCategoryContextMenu: function(event, categoryName) {
+            const menu = DOM.elements.categoryContextMenu;
+            menu.style.left = `${event.clientX}px`;
+            menu.style.top = `${event.clientY}px`;
+            menu.style.display = 'block';
+            menu.dataset.categoryName = categoryName;
+        },
+        hideCategoryContextMenu: function() {
+            if(DOM.elements.categoryContextMenu) DOM.elements.categoryContextMenu.style.display = 'none';
+        },
+
+        // --- Modals (Edit / Add Item) ---
+        showEditModal: function(itemId = null) {
+            const modal = DOM.elements.editModal;
+            const categorySelect = DOM.elements.editCategory;
+
+            categorySelect.innerHTML = '';
+            State.data.categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categorySelect.appendChild(option);
+            });
+
+            if (itemId) {
+                // 编辑模式
+                const item = State.data.items.find(i => i.id === itemId);
+                if (item) {
+                    DOM.elements.editTitle.value = item.title;
+                    DOM.elements.editStartDate.value = item.startDate || '';
+                    DOM.elements.editEndDate.value = item.endDate || '';
+                    DOM.elements.editContent.value = item.content;
+                    categorySelect.value = item.category;
+                    modal.dataset.itemId = itemId;
+                    modal.querySelector('.modal-title').textContent = '编辑信息';
+                }
+            } else {
+                // 新增模式
+                DOM.elements.editTitle.value = '';
+                DOM.elements.editStartDate.value = '';
+                DOM.elements.editEndDate.value = '';
+                DOM.elements.editContent.value = '';
+                modal.dataset.itemId = '';
+                modal.querySelector('.modal-title').textContent = '添加信息';
+
+                if (State.data.activeCategory !== Config.DEFAULT_CATEGORY) {
+                    categorySelect.value = State.data.activeCategory;
+                }
+            }
+
+            modal.style.display = 'block';
+            DOM.elements.overlay.style.display = 'block';
+            DOM.elements.editTitle.focus();
+        },
+        hideEditModal: function() {
+            DOM.elements.editModal.style.display = 'none';
+            DOM.elements.overlay.style.display = 'none';
+        },
+        getEditModalData: function() {
+            const modal = DOM.elements.editModal;
+            return {
+                id: modal.dataset.itemId || null,
+                title: DOM.elements.editTitle.value.trim(),
+                startDate: DOM.elements.editStartDate.value,
+                endDate: DOM.elements.editEndDate.value,
+                content: DOM.elements.editContent.value.trim(),
+                category: DOM.elements.editCategory.value,
+            };
+        },
+
+        // --- Modals (Category) ---
+        showCategoryModal: function() {
+            DOM.elements.categoryNameInput.value = '';
+            DOM.elements.categoryModal.style.display = 'block';
+            DOM.elements.overlay.style.display = 'block';
+            DOM.elements.categoryNameInput.focus();
+        },
+        hideCategoryModal: function() {
+            DOM.elements.categoryModal.style.display = 'none';
+            DOM.elements.overlay.style.display = 'none';
+        },
+        getCategoryModalData: function() {
+            return DOM.elements.categoryNameInput.value.trim();
+        },
+        
+        // --- Modals (Confirmations) ---
+        showDeleteItemConfirm: function(itemId, onConfirm) {
+            let modal = DOM.elements.deleteItemModal; // 使用缓存的 modal
+            if (!modal) return; // 安全检查
+
+            modal.style.display = 'block';
+            DOM.elements.overlay.style.display = 'block';
+
+            const confirmBtn = modal.querySelector(Config.SELECTORS.CONFIRM_DELETE_ITEM_BTN);
+            const cancelBtn = modal.querySelector(Config.SELECTORS.CANCEL_DELETE_ITEM_BTN);
+
+            const close = () => {
+                modal.style.display = 'none';
+                DOM.elements.overlay.style.display = 'none';
+                confirmBtn.removeEventListener('click', confirmHandler);
+                cancelBtn.removeEventListener('click', close);
+                DOM.elements.overlay.removeEventListener('click', overlayHandler);
+            };
+            
+            const confirmHandler = () => {
+                onConfirm(itemId);
+                close();
+            };
+            
+            const overlayHandler = (e) => {
+                if (e.target === DOM.elements.overlay) close();
+            };
+
+            confirmBtn.addEventListener('click', confirmHandler);
+            cancelBtn.addEventListener('click', close);
+            DOM.elements.overlay.addEventListener('click', overlayHandler);
+        },
+        
+        showDeleteCategoryConfirm: function(categoryName, onConfirm) {
+            let modal = DOM.elements.deleteCategoryModal; // 使用缓存的 modal
+            if (!modal) return; // 安全检查
+
+            modal.querySelector('.delete-category-message').innerHTML = `确定要删除分类“<strong>${categoryName}</strong>”吗？`;
+            modal.style.display = 'block';
+            DOM.elements.overlay.style.display = 'block';
+            
+            const confirmBtn = modal.querySelector(Config.SELECTORS.CONFIRM_DELETE_CATEGORY_BTN);
+            const cancelBtn = modal.querySelector(Config.SELECTORS.CANCEL_DELETE_CATEGORY_BTN);
+            
+            const close = () => {
+                modal.style.display = 'none';
+                DOM.elements.overlay.style.display = 'none';
+                confirmBtn.removeEventListener('click', confirmHandler);
+                cancelBtn.removeEventListener('click', close);
+                DOM.elements.overlay.removeEventListener('click', overlayHandler);
+            };
+
+            const confirmHandler = () => {
+                const moveItems = modal.querySelector('input[name="delete-option"]:checked').value === 'move';
+                onConfirm(categoryName, moveItems);
+                close();
+            };
+
+            const overlayHandler = (e) => {
+                if (e.target === DOM.elements.overlay) close();
+            };
+
+            confirmBtn.addEventListener('click', confirmHandler);
+            cancelBtn.addEventListener('click', close);
+            DOM.elements.overlay.addEventListener('click', overlayHandler);
+        },
+
+        showRenameCategoryPrompt: function(oldName, onConfirm) {
+            let modal = DOM.elements.renameCategoryModal; // 使用缓存的 modal
+            if (!modal) return; // 安全检查
+            
+            modal.querySelector('.rename-category-message').innerHTML = `请为分类“<strong>${oldName}</strong>”输入新名称：`;
+            const input = modal.querySelector(Config.SELECTORS.NEW_CATEGORY_NAME_INPUT);
+            input.value = oldName;
+
+            modal.style.display = 'block';
+            DOM.elements.overlay.style.display = 'block';
+            input.focus();
+
+            const confirmBtn = modal.querySelector(Config.SELECTORS.CONFIRM_RENAME_CATEGORY_BTN);
+            const cancelBtn = modal.querySelector(Config.SELECTORS.CANCEL_RENAME_CATEGORY_BTN);
+
+            const close = () => {
+                modal.style.display = 'none';
+                DOM.elements.overlay.style.display = 'none';
+                confirmBtn.removeEventListener('click', confirmHandler);
+                cancelBtn.removeEventListener('click', close);
+                DOM.elements.overlay.removeEventListener('click', overlayHandler);
+            };
+
+            const confirmHandler = () => {
+                const newName = input.value.trim();
+                if (onConfirm(oldName, newName)) {
+                    close();
+                }
+            };
+            
+            const overlayHandler = (e) => {
+                if (e.target === DOM.elements.overlay) close();
+            };
+
+            confirmBtn.addEventListener('click', confirmHandler);
+            cancelBtn.addEventListener('click', close);
+            DOM.elements.overlay.addEventListener('click', overlayHandler);
+        },
+
+        // --- Modals (Detail View) ---
+        showDetailModal: function(item) {
+            let modal = DOM.elements.detailModal; // 使用缓存的 modal
+            if (!modal) return; // 安全检查
+            
+            DOM.elements.detailTitle.textContent = item.title;
+            DOM.elements.detailCategory.textContent = item.category;
+            
+            const dateElement = DOM.elements.detailDate;
+            
+            // --- 修复开始 ---
+            // 恢复日期显示逻辑，并移除错误粘贴的 HTML
+            if (item.startDate || item.endDate) {
+                dateElement.textContent = item.startDate && item.endDate 
+                    ? `${item.startDate} - ${item.endDate}` 
+                    : (item.startDate || item.endDate);
+                // 显示包含日期的整个 .info-field
+                if(dateElement.parentElement) dateElement.parentElement.style.display = "block";
+            } else {
+                // 隐藏包含日期的整个 .info-field
+                if(dateElement.parentElement) dateElement.parentElement.style.display = "none";
+            }
+            
+            DOM.elements.detailContent.textContent = item.content;
+            modal.style.display = "block";
+            // --- 修复结束 ---
+        },
+        hideDetailModal: function() {
+            if (DOM.elements.detailModal) { // 使用缓存的 modal
+                DOM.elements.detailModal.style.display = "none";
+            }
+        },
+
+        // --- Sidebar State ---
+        expandSidebar: function() {
+            DOM.elements.assistant.classList.remove(Config.CLASSES.COLLAPSED);
+            DOM.elements.assistant.classList.add(Config.CLASSES.OPEN);
+            State.ui.isExpanded = true;
+        },
+        collapseSidebar: function() {
+            DOM.elements.assistant.classList.remove(Config.CLASSES.OPEN);
+            DOM.elements.assistant.classList.add(Config.CLASSES.COLLAPSED);
+            State.ui.isExpanded = false;
+        },
+        toggleSidebarPosition: function() {
+            const assistant = DOM.elements.assistant;
+            const toggleBtn = DOM.elements.toggleBtn;
+
+            if (assistant.classList.contains(Config.CLASSES.LEFT)) {
+                assistant.classList.remove(Config.CLASSES.LEFT);
+                toggleBtn.textContent = '◀';
+                toggleBtn.title = '移到左侧';
+                State.data.sidebarPosition = 'right';
+            } else {
+                assistant.classList.add(Config.CLASSES.LEFT);
+                toggleBtn.textContent = '▶';
+                toggleBtn.title = '移到右侧';
+                State.data.sidebarPosition = 'left';
+            }
+            Storage.save();
+        },
+        applyFixedState: function(isFixed) {
+            const assistant = DOM.elements.assistant;
+            const fixBtn = DOM.elements.fixBtn;
+            if (isFixed) {
+                assistant.classList.add(Config.CLASSES.FIXED);
+                fixBtn.textContent = '🔒';
+                fixBtn.title = '固定';
+            } else {
+                assistant.classList.remove(Config.CLASSES.FIXED);
+                fixBtn.textContent = '🔓';
+                fixBtn.title = '取消固定';
+            }
+        },
+        applySidebarPosition: function(position) {
+            const assistant = DOM.elements.assistant;
+            if (position === 'left') {
+                assistant.classList.add(Config.CLASSES.LEFT);
+            } else {
+                assistant.classList.remove(Config.CLASSES.LEFT);
+            }
+        },
+
+        // --- Sidebar Drag (Collapsed) ---
+        startSidebarDrag: function(e) {
+            State.ui.isDraggingSidebar = true;
+            State.ui.hasDraggedSidebar = true;
+            State.ui.sidebarDragStartY = e.clientY;
+            
+            const computedStyle = window.getComputedStyle(DOM.elements.assistant);
+            State.ui.sidebarDragStartTop = parseFloat(computedStyle.top) || 0;
+            
+            DOM.elements.assistant.classList.remove(Config.CLASSES.DRAG_READY);
+            DOM.elements.assistant.classList.add(Config.CLASSES.DRAGGING);
+            
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'ns-resize';
+        },
+        handleSidebarDrag: function(e) {
+            if (!State.ui.isDraggingSidebar) return;
+
+            if (State.ui.lastSidebarAnimationFrame) {
+                cancelAnimationFrame(State.ui.lastSidebarAnimationFrame);
+            }
+
+            State.ui.lastSidebarAnimationFrame = requestAnimationFrame(() => {
+                const currentTime = Date.now();
+                const deltaY = e.clientY - State.ui.sidebarDragStartY;
+                const newTop = State.ui.sidebarDragStartTop + deltaY;
+                
+                if (State.ui.lastSidebarDragTime > 0) {
+                    const deltaTime = currentTime - State.ui.lastSidebarDragTime;
+                    if (deltaTime > 0) {
+                        State.ui.sidebarDragVelocity = (deltaY - State.ui.lastSidebarDragY) / deltaTime;
+                    }
+                }
+                State.ui.lastSidebarDragY = deltaY;
+                State.ui.lastSidebarDragTime = currentTime;
+                
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = DOM.elements.assistant.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                
+                let clampedTop = Math.max(minTop, Math.min(maxTop, newTop));
+                
+                if (newTop < minTop) {
+                    const overshoot = minTop - newTop;
+                    clampedTop = minTop - Math.min(overshoot * 0.3, 20);
+                } else if (newTop > maxTop) {
+                    const overshoot = newTop - maxTop;
+                    clampedTop = maxTop + Math.min(overshoot * 0.3, 20);
+                }
+                
+                DOM.elements.assistant.style.setProperty('--collapsed-top', clampedTop + 'px');
+            });
+        },
+        endSidebarDrag: function() {
+            State.ui.isDraggingSidebar = false;
+            
+            if (State.ui.lastSidebarAnimationFrame) {
+                cancelAnimationFrame(State.ui.lastSidebarAnimationFrame);
+                State.ui.lastSidebarAnimationFrame = null;
+            }
+            
+            setTimeout(() => {
+                DOM.elements.assistant.classList.remove(Config.CLASSES.DRAGGING);
+            }, 10);
+            
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            
+            if (DOM.elements.assistant.classList.contains(Config.CLASSES.COLLAPSED)) {
+                const currentTop = parseFloat(DOM.elements.assistant.style.getPropertyValue('--collapsed-top')) || 0;
+                State.data.collapsedPosition = { top: currentTop };
+                Storage.save();
+            }
+            
+            State.ui.lastSidebarDragY = 0;
+            State.ui.sidebarDragVelocity = 0;
+            State.ui.lastSidebarDragTime = 0;
+        },
+        restoreCollapsedPosition: function() {
+            if (State.data.collapsedPosition && DOM.elements.assistant.classList.contains(Config.CLASSES.COLLAPSED)) {
+                const { top } = State.data.collapsedPosition;
+                const viewportHeight = window.innerHeight;
+                const sidebarHeight = DOM.elements.assistant.offsetHeight;
+                const minTop = 0;
+                const maxTop = viewportHeight - sidebarHeight;
+                const validTop = Math.max(minTop, Math.min(maxTop, parseInt(top) || viewportHeight / 2 - sidebarHeight / 2));
+                
+                DOM.elements.assistant.style.setProperty('--collapsed-top', validTop + 'px');
+            }
+        },
+
+        // --- Helper ---
+        isClickInExcludedElements: function(target) {
+            const excludedIds = [
+                Config.SELECTORS.EDIT_MODAL,
+                Config.SELECTORS.CATEGORY_MODAL,
+                Config.SELECTORS.DELETE_ITEM_MODAL,
+                Config.SELECTORS.DELETE_CATEGORY_MODAL,
+                Config.SELECTORS.RENAME_CATEGORY_MODAL,
+                Config.SELECTORS.CONTEXT_MENU,
+                Config.SELECTORS.CATEGORY_CONTEXT_MENU,
+                Config.SELECTORS.OVERLAY,
+                Config.SELECTORS.DETAIL_MODAL,
+            ];
+
+            for (const id of excludedIds) {
+                if (target.closest(id)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: TinyMCEIntegrator
+     * 封装所有与 TinyMCE 编辑器集成的逻辑
+     * ----------------------------------------------------------------
+     */
+    const TinyMCEIntegrator = {
+        init: function() {
+            this.checkAndBindExisting();
+            this.observeForNewEditors();
+            console.log("[TinyMCE] 事件监听初始化完成 (Observer + 短轮询).");
+
+            // 自动填充的全局监听
+            document.addEventListener('mouseup', (e) => {
+                if (State.autofill.lastClickedItemContent) {
+                    console.log('[AutoFill Debug] 执行自动填充');
+                    
+                    // 检查是否点击在 TinyMCE 实例上
+                    const tinymceEditor = this.findEditorForElement(e.target);
+                    if (tinymceEditor) {
+                        console.log(`[AutoFill Debug] 填充到 TinyMCE: ${tinymceEditor.id}`);
+                        tinymceEditor.setContent(State.autofill.lastClickedItemContent);
+                    } else {
+                        // 否则，使用通用模拟输入
+                        Utils.simulateInputAtCursor(State.autofill.lastClickedItemContent);
+                    }
+                    
+                    this.clearAutofill();
+                }
+            });
+        },
+        
+        findEditorForElement: function(element) {
+            if (!unsafeWindow.tinymce || !unsafeWindow.tinymce.editors) return null;
+            
+            for (const editor of unsafeWindow.tinymce.editors) {
+                if (editor.iframeElement && editor.iframeElement.contains(element)) {
+                    return editor;
+                }
+                if (editor.inline && editor.getBody().contains(element)) {
+                    return editor;
+                }
+            }
+            // 检查 e.target 是否是某个 editor 的 iframe
+            const iframe = element.closest('iframe.tox-edit-area__iframe');
+            if (iframe) {
+                return unsafeWindow.tinymce.editors.find(ed => ed.iframeElement === iframe);
+            }
+            
+            return null;
+        },
+
+        clearAutofill: function() {
+            State.autofill.lastClickedItemContent = null;
+            if (State.autofill.timeout) {
+                clearTimeout(State.autofill.timeout);
+                State.autofill.timeout = null;
+            }
+        },
+
+        setAutofill: function(content) {
+            this.clearAutofill();
+            State.autofill.lastClickedItemContent = content;
+            State.autofill.timeout = setTimeout(() => {
+                this.clearAutofill();
+                console.log('[AutoFill Debug] 自动填充超时，已清除缓存的内容');
+            }, Config.TIMERS.AUTO_FILL_TIMEOUT);
+        },
+
+        bindEditorEvents: function(editor) {
+            if (!editor || editor._tampermonkeyBound) return;
+            editor._tampermonkeyBound = true;
+            console.log("[TinyMCE] 绑定事件:", editor.id);
+
+            editor.on('init', () => {
+                const iframe = editor.iframeElement;
+                if (iframe && iframe.contentDocument) {
+                    const doc = iframe.contentDocument;
+                    doc.addEventListener('click', (e) => {
+                        if (State.autofill.lastClickedItemContent) {
+                            editor.setContent(State.autofill.lastClickedItemContent);
+                            this.clearAutofill();
+                            console.log(`[TinyMCE DOM] [${editor.id}] Clicked and filled:`, e.target);
+                        }
+                    });
+                    console.log(`[TinyMCE] DOM 监听已挂载 -> ${editor.id}`);
+                }
+            });
+        },
+
+        checkAndBindExisting: function() {
+            let bound = false;
+            if (unsafeWindow.tinymce && unsafeWindow.tinymce.editors) {
+                unsafeWindow.tinymce.editors.forEach(editor => {
+                    if (editor && !editor.destroyed && !editor._tampermonkeyBound) {
+                        this.bindEditorEvents(editor);
+                        bound = true;
+                    }
+                });
+            }
+            return bound;
+        },
+
+        startShortPolling: function() {
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                if (this.checkAndBindExisting()) {
+                    clearInterval(interval);
+                    return;
+                }
+                elapsed += Config.TIMERS.TINYMCE_POLL_INTERVAL;
+                if (elapsed >= Config.TIMERS.TINYMCE_POLL_TIMEOUT) {
+                    clearInterval(interval);
+                }
+            }, Config.TIMERS.TINYMCE_POLL_INTERVAL);
+        },
+
+        observeForNewEditors: function() {
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length > 0) {
+                        this.startShortPolling();
+                        break;
+                    }
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    };
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: Handlers
+     * 存放所有事件处理函数 (业务逻辑)
+     * ----------------------------------------------------------------
+     */
+    const Handlers = {
+        // --- Sidebar Controls ---
+        onTogglePositionClick: function(e) {
+            e.stopPropagation();
+            UI.toggleSidebarPosition();
+        },
+        onFixBtnClick: function(e) {
+            e.stopPropagation();
+            State.data.isFixed = !State.data.isFixed;
+            UI.applyFixedState(State.data.isFixed);
+            Storage.save();
+        },
+        onCloseBtnClick: function(e) {
+            e.stopPropagation();
+            UI.collapseSidebar();
+        },
+        onTitleClick: function(e) {
+            e.stopPropagation();
+            if (DOM.elements.assistant.classList.contains(Config.CLASSES.COLLAPSED) && !State.ui.hasDraggedSidebar) {
+                UI.expandSidebar();
+            } else {
+                UI.collapseSidebar();
+            }
+        },
+        onAssistantClick: function(e) {
+            if (DOM.elements.assistant.classList.contains(Config.CLASSES.COLLAPSED) &&
+                !e.target.closest(Config.SELECTORS.CONTROLS) &&
+                e.target.id !== Config.SELECTORS.TITLE.slice(1) &&
+                !State.ui.hasDraggedSidebar) {
+                UI.expandSidebar();
+            }
+        },
+
+        // --- Sidebar Drag ---
+        onSidebarMouseDown: function(e) {
+            if (DOM.elements.assistant.classList.contains(Config.CLASSES.COLLAPSED)) {
+                e.preventDefault();
+                DOM.elements.assistant.classList.add(Config.CLASSES.DRAG_READY);
+                State.ui.hasDraggedSidebar = false;
+                
+                State.ui.sidebarLongPressTimer = setTimeout(() => {
+                    UI.startSidebarDrag(e);
+                }, Config.TIMERS.SIDEBAR_DRAG_START_DELAY);
+            }
+        },
+        onDocumentMouseMove: function(e) {
+            if (State.ui.isDraggingSidebar) {
+                UI.handleSidebarDrag(e);
+            }
+        },
+        onDocumentMouseUp: function() {
+            DOM.elements.assistant.classList.remove(Config.CLASSES.DRAG_READY);
+            if (State.ui.sidebarLongPressTimer) {
+                clearTimeout(State.ui.sidebarLongPressTimer);
+                State.ui.sidebarLongPressTimer = null;
+            }
+            if (State.ui.isDraggingSidebar) {
+                UI.endSidebarDrag();
+            }
+        },
+
+        // --- Global Clicks / Keys ---
+        onDocumentClick: function(e) {
+            // 1. 关闭右键菜单
+            UI.hideContextMenu();
+            UI.hideCategoryContextMenu();
+            
+            // 2. 点击外部自动收起侧边栏
+            const assistant = DOM.elements.assistant;
+            if (!assistant.contains(e.target) &&
+                State.ui.isExpanded &&
+                !State.data.isFixed &&
+                !UI.isClickInExcludedElements(e.target)) {
+                UI.collapseSidebar();
+            }
+        },
+        onDocumentKeydown: function(e) {
+            // ESC 关闭 Modals
+            if (e.key === 'Escape') {
+                UI.hideEditModal();
+                UI.hideCategoryModal();
+                // (确认框由其各自的取消按钮处理)
+            }
+            // 快捷键 Alt+Shift+L
+            if (e.key.toLowerCase() === 'l' && e.altKey && e.shiftKey) {
+                e.preventDefault();
+                State.ui.isExpanded ? UI.collapseSidebar() : UI.expandSidebar();
+            }
+            // Ctrl 键按下 (用于详情)
+            if (State.hoverDetail.isMouseOver && State.hoverDetail.currentItem && (e.key === "Control" || e.key === "Ctrl")) {
+                if (State.hoverDetail.timer) clearTimeout(State.hoverDetail.timer);
+                State.hoverDetail.timer = setTimeout(() => {
+                    const fullItem = State.data.items.find(i => i.id === State.hoverDetail.currentItem.dataset.id);
+                    if (fullItem) UI.showDetailModal(fullItem);
+                }, Config.TIMERS.DETAIL_HOVER_DELAY);
+            }
+        },
+        onDocumentKeyup: function(e) {
+            // Ctrl 键松开
+            if (e.key === "Control" || e.key === "Ctrl") {
+                if (State.hoverDetail.timer) clearTimeout(State.hoverDetail.timer);
+                State.hoverDetail.timer = null;
+                UI.hideDetailModal();
+            }
+        },
+
+        // --- Footer ---
+        onSearchInput: function() {
+            DOM.renderItems();
+        },
+        onAddItemClick: function() {
+            UI.showEditModal(null);
+        },
+
+        // --- Modals (Item) ---
+        onSaveItemClick: function() {
+            const data = UI.getEditModalData();
+            if (!data.title || !data.content) {
+                alert('请填写标题和内容');
+                return;
+            }
+            Storage.saveItem(data);
+            DOM.update();
+            UI.hideEditModal();
+        },
+        onCancelEditClick: function() {
+            UI.hideEditModal();
+        },
+
+        // --- Modals (Category) ---
+        onSaveCategoryClick: function() {
+            const name = UI.getCategoryModalData();
+            if (name) {
+                if (Storage.saveCategory(name)) {
+                    DOM.update();
+                    UI.hideCategoryModal();
+                } else {
+                    alert('分类已存在！');
+                }
+            }
+        },
+        onCancelCategoryClick: function() {
+            UI.hideCategoryModal();
+        },
+        
+        // --- Overlay ---
+        onOverlayClick: function(e) {
+            if (e.target === DOM.elements.overlay) {
+                UI.hideEditModal();
+                UI.hideCategoryModal();
+                // 确认框有自己的 overlay 监听
+            }
+        },
+
+        // --- Category Container (Delegated) ---
+        onCategoryContainerClick: function(e) {
+            e.stopPropagation();
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn) {
+                State.data.activeCategory = categoryBtn.dataset.category;
+                DOM.renderCategories();
+                DOM.renderItems();
+            }
+            if (e.target.closest(Config.SELECTORS.ADD_CATEGORY_BTN)) {
+                UI.showCategoryModal();
+            }
+        },
+        onCategoryContainerContextMenu: function(e) {
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn) {
+                e.preventDefault();
+                const categoryName = categoryBtn.dataset.category;
+                if (categoryName !== Config.DEFAULT_CATEGORY) {
+                    UI.showCategoryContextMenu(e, categoryName);
+                }
+            }
+        },
+        onCategoryDragStart: function(e) {
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn && categoryBtn.dataset.category !== Config.DEFAULT_CATEGORY) {
+                e.stopPropagation();
+                State.drag.draggedCategory = categoryBtn;
+                categoryBtn.classList.add(Config.CLASSES.DRAGGING);
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        },
+        onCategoryDragEnd: function(e) {
+            if (State.drag.draggedCategory) {
+                State.drag.draggedCategory.classList.remove(Config.CLASSES.DRAGGING);
+            }
+            if (State.drag.overCategory) {
+                State.drag.overCategory.style.borderTop = 'none';
+            }
+            State.drag.draggedCategory = null;
+            State.drag.overCategory = null;
+        },
+        onCategoryDragOver: function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        },
+        onCategoryDragEnter: function(e) {
+            e.preventDefault();
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn && categoryBtn !== State.drag.draggedCategory && categoryBtn !== State.drag.overCategory && categoryBtn.dataset.category !== Config.DEFAULT_CATEGORY) {
+                if (State.drag.overCategory) {
+                    State.drag.overCategory.style.borderTop = 'none';
+                }
+                State.drag.overCategory = categoryBtn;
+                State.drag.overCategory.style.borderTop = '2px solid #4CAF50';
+            }
+        },
+        onCategoryDragLeave: function(e) {
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn && State.drag.overCategory === categoryBtn) {
+                if (!categoryBtn.contains(e.relatedTarget)) {
+                    categoryBtn.style.borderTop = 'none';
+                    State.drag.overCategory = null;
+                }
+            }
+        },
+        onCategoryDrop: function(e) {
+            e.preventDefault();
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            if (categoryBtn && categoryBtn !== State.drag.draggedCategory && categoryBtn.dataset.category !== Config.DEFAULT_CATEGORY && State.drag.draggedCategory) {
+                const draggedName = State.drag.draggedCategory.dataset.category;
+                const targetName = categoryBtn.dataset.category;
+                Storage.updateCategoryOrder(draggedName, targetName);
+                DOM.renderCategories(); // 只重绘分类
+            }
+            if (State.drag.overCategory) {
+                State.drag.overCategory.style.borderTop = 'none';
+            }
+            State.drag.overCategory = null;
+        },
+        
+        // --- Category Context Menu ---
+        onRenameCategoryMenuClick: function() {
+            const categoryName = DOM.elements.categoryContextMenu.dataset.categoryName;
+            UI.hideCategoryContextMenu();
+            if (categoryName) {
+                UI.showRenameCategoryPrompt(categoryName, (oldName, newName) => {
+                    const success = Storage.renameCategory(oldName, newName);
+                    if (success) DOM.update();
+                    return success;
+                });
+            }
+        },
+        onDeleteCategoryMenuClick: function() {
+            const categoryName = DOM.elements.categoryContextMenu.dataset.categoryName;
+            UI.hideCategoryContextMenu();
+            if (categoryName) {
+                UI.showDeleteCategoryConfirm(categoryName, (name, moveItems) => {
+                    Storage.deleteCategory(name, moveItems);
+                    // 如果删除的是当前激活的分类，则切换到“全部”
+                    if (State.data.activeCategory === name) {
+                        State.data.activeCategory = Config.DEFAULT_CATEGORY;
+                    }
+                    DOM.update();
+                });
+            }
+        },
+
+        // --- Items Container (Delegated) ---
+        onItemsContainerClick: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (!itemEl) return;
+
+            // 检查右键菜单是否可见
+            if (DOM.elements.contextMenu.style.display === 'block') return;
+
+            const itemId = itemEl.dataset.id;
+            const item = State.data.items.find(i => i.id === itemId);
+            if (!item) return;
+
+            const isShift = e.shiftKey;
+            const isCtrl = e.ctrlKey;
+
+            if (isShift && isCtrl) {
+                // Shift+Ctrl: 复制标题
+                console.log('[AutoFill Debug] Shift+Ctrl: 复制标题');
+                Utils.copyToClipboard(item.title);
+            } else if (isCtrl) {
+                // Ctrl: 复制内容
+                console.log('[AutoFill Debug] Ctrl: 复制内容');
+                Utils.copyToClipboard(item.content);
+            } else if (isShift) {
+                // Shift: 自动填充标题
+                console.log('[AutoFill Debug] Shift: 准备填充标题');
+                TinyMCEIntegrator.setAutofill(item.title);
+            } else {
+                // Click: 自动填充内容
+                console.log('[AutoFill Debug] Click: 准备填充内容');
+                TinyMCEIntegrator.setAutofill(item.content);
+            }
+        },
+        onItemsContainerContextMenu: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl) {
+                e.preventDefault();
+                UI.hideContextMenu();
+                UI.hideCategoryContextMenu();
+                const itemId = itemEl.dataset.id;
+                UI.showContextMenu(e, itemId);
+            }
+        },
+        onItemsContainerDragStart: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl) {
+                e.stopPropagation();
+                State.drag.draggedItem = itemEl;
+                itemEl.classList.add(Config.CLASSES.DRAGGING);
+                e.dataTransfer.effectAllowed = 'move';
+                // (自定义拖拽图像的逻辑可以加在这里)
+            }
+        },
+        onItemsContainerDragEnd: function() {
+            if (State.drag.draggedItem) {
+                State.drag.draggedItem.classList.remove(Config.CLASSES.DRAGGING);
+            }
+            if (State.drag.overItem) {
+                State.drag.overItem.style.borderTop = 'none';
+            }
+            State.drag.draggedItem = null;
+            State.drag.overItem = null;
+        },
+        onItemsContainerDragOver: function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        },
+        onItemsContainerDragEnter: function(e) {
+            e.preventDefault();
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl && itemEl !== State.drag.draggedItem && itemEl !== State.drag.overItem) {
+                if (State.drag.overItem) {
+                    State.drag.overItem.style.borderTop = 'none';
+                }
+                State.drag.overItem = itemEl;
+                State.drag.overItem.style.borderTop = '2px solid #4CAF50';
+            }
+        },
+        onItemsContainerDragLeave: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+             if (itemEl && State.drag.overItem === itemEl) {
+                if (!itemEl.contains(e.relatedTarget)) {
+                    itemEl.style.borderTop = 'none';
+                    State.drag.overItem = null;
+                }
+            }
+        },
+        onItemsContainerDrop: function(e) {
+            e.preventDefault();
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl && itemEl !== State.drag.draggedItem && State.drag.draggedItem) {
+                const draggedId = State.drag.draggedItem.dataset.id;
+                const targetId = itemEl.dataset.id;
+                Storage.updateItemOrder(draggedId, targetId);
+                DOM.renderItems(); // 只重绘 Items
+            }
+            if (State.drag.overItem) {
+                State.drag.overItem.style.borderTop = 'none';
+            }
+            State.drag.overItem = null;
+        },
+        onItemsContainerMouseOver: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl) {
+                State.hoverDetail.isMouseOver = true;
+                State.hoverDetail.currentItem = itemEl;
+                if (e.ctrlKey) {
+                    Handlers.onDocumentKeydown(e); // 触发 Ctrl 按下逻辑
+                }
+            }
+        },
+        onItemsContainerMouseOut: function(e) {
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            if (itemEl) {
+                State.hoverDetail.isMouseOver = false;
+                State.hoverDetail.currentItem = null;
+                if (State.hoverDetail.timer) clearTimeout(State.hoverDetail.timer);
+                State.hoverDetail.timer = null;
+                UI.hideDetailModal();
+            }
+        },
+
+        // --- Item Context Menu ---
+        onEditItemMenuClick: function() {
+            const itemId = DOM.elements.contextMenu.dataset.itemId;
+            UI.hideContextMenu();
+            if (itemId) {
+                UI.showEditModal(itemId);
+            }
+        },
+        onDeleteItemMenuClick: function() {
+            const itemId = DOM.elements.contextMenu.dataset.itemId;
+            UI.hideContextMenu();
+            if (itemId) {
+                UI.showDeleteItemConfirm(itemId, (id) => {
+                    Storage.deleteItemById(id);
+                    DOM.update();
+                });
+            }
+        },
+    };
+
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: Events
+     * 集中管理所有 DOM 事件监听器的绑定
+     * ----------------------------------------------------------------
+     */
+    const Events = {
+        init: function() {
+            const els = DOM.elements; //
+            
+            // --- Sidebar Controls ---
+            els.toggleBtn.addEventListener('click', Handlers.onTogglePositionClick);
+            els.fixBtn.addEventListener('click', Handlers.onFixBtnClick);
+            els.closeBtn.addEventListener('click', Handlers.onCloseBtnClick);
+            els.title.addEventListener('click', Handlers.onTitleClick);
+            els.assistant.addEventListener('click', Handlers.onAssistantClick);
+
+            // --- Sidebar Drag ---
+            els.assistant.addEventListener('mousedown', Handlers.onSidebarMouseDown);
+            document.addEventListener('mousemove', Handlers.onDocumentMouseMove);
+            document.addEventListener('mouseup', Handlers.onDocumentMouseUp);
+
+            // --- Global ---
+            document.addEventListener('click', Handlers.onDocumentClick);
+            document.addEventListener('keydown', Handlers.onDocumentKeydown);
+            document.addEventListener('keyup', Handlers.onDocumentKeyup);
+            window.addEventListener('resize', UI.restoreCollapsedPosition);
+            
+            // --- Footer ---
+            els.searchInput.addEventListener('input', Handlers.onSearchInput);
+            els.addItemBtn.addEventListener('click', Handlers.onAddItemClick);
+            
+            // --- Modals ---
+            els.saveEditBtn.addEventListener('click', Handlers.onSaveItemClick);
+            els.cancelEditBtn.addEventListener('click', Handlers.onCancelEditClick);
+            els.saveCategoryBtn.addEventListener('click', Handlers.onSaveCategoryClick);
+            els.cancelCategoryBtn.addEventListener('click', Handlers.onCancelCategoryClick);
+            els.overlay.addEventListener('click', Handlers.onOverlayClick);
+            
+            // --- Category Container (Event Delegation) ---
+            els.categoryContainer.addEventListener('click', Handlers.onCategoryContainerClick);
+            els.categoryContainer.addEventListener('contextmenu', Handlers.onCategoryContainerContextMenu);
+            els.categoryContainer.addEventListener('dragstart', Handlers.onCategoryDragStart);
+            els.categoryContainer.addEventListener('dragend', Handlers.onCategoryDragEnd);
+            els.categoryContainer.addEventListener('dragover', Handlers.onCategoryDragOver);
+            els.categoryContainer.addEventListener('dragenter', Handlers.onCategoryDragEnter);
+            els.categoryContainer.addEventListener('dragleave', Handlers.onCategoryDragLeave);
+            els.categoryContainer.addEventListener('drop', Handlers.onCategoryDrop);
+            
+            // --- Category Context Menu ---
+            els.renameCategoryMenu.addEventListener('click', Handlers.onRenameCategoryMenuClick);
+            els.deleteCategoryMenu.addEventListener('click', Handlers.onDeleteCategoryMenuClick);
+            
+            // --- Items Container (Event Delegation) ---
+            els.itemsContainer.addEventListener('click', Handlers.onItemsContainerClick);
+            els.itemsContainer.addEventListener('contextmenu', Handlers.onItemsContainerContextMenu);
+            els.itemsContainer.addEventListener('dragstart', Handlers.onItemsContainerDragStart);
+            els.itemsContainer.addEventListener('dragend', Handlers.onItemsContainerDragEnd);
+            els.itemsContainer.addEventListener('dragover', Handlers.onItemsContainerDragOver);
+            els.itemsContainer.addEventListener('dragenter', Handlers.onItemsContainerDragEnter);
+            els.itemsContainer.addEventListener('dragleave', Handlers.onItemsContainerDragLeave);
+            els.itemsContainer.addEventListener('drop', Handlers.onItemsContainerDrop);
+            els.itemsContainer.addEventListener('mouseover', Handlers.onItemsContainerMouseOver);
+            els.itemsContainer.addEventListener('mouseout', Handlers.onItemsContainerMouseOut);
+            
+            // --- Item Context Menu ---
+            els.editItemMenu.addEventListener('click', Handlers.onEditItemMenuClick);
+            els.deleteItemMenu.addEventListener('click', Handlers.onDeleteItemMenuClick);
+        }
+    };
+
+    /**
+     * ----------------------------------------------------------------
+     * 模块: App
+     * 应用主控制器，负责初始化和协调所有模块
+     * ----------------------------------------------------------------
+     */
+    const App = {
+        init: function() {
+            console.log("正在启动 Resumer (Refactored)...");
+            
+            // 1. 注入样式
+            StyleManager.inject();
+
+            // 2. 加载数据
+            Storage.initialize();
+            Storage.load();
+
+            // 3. 创建并渲染 DOM
+            DOM.create(); // 内部已包含 DOM.cache()
+            DOM.update();
+
+            // 4. 恢复 UI 状态
+            UI.applyFixedState(State.data.isFixed);
+            UI.applySidebarPosition(State.data.sidebarPosition);
+            UI.restoreCollapsedPosition(); // 恢复收起时的位置
+
+            // 5. 绑定所有事件
+            Events.init();
+
+            // 6. 初始化第三方集成
+            TinyMCEIntegrator.init();
+
+            console.log("Resumer (Refactored) 启动完成。");
+        }
+    };
+
+    // --- 启动应用 ---
+    App.init();
 
 })();
