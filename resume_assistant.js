@@ -75,6 +75,7 @@
             NEW_CATEGORY_NAME_INPUT: '#new-category-name',
             CANCEL_RENAME_CATEGORY_BTN: '#cancel-rename-category',
             CONFIRM_RENAME_CATEGORY_BTN: '#confirm-rename-category',
+            ALERT_MODAL: '#alert-modal', // 新增：通用提示框
         },
         CLASSES: {
             LEFT: 'left',
@@ -996,7 +997,7 @@
         renameCategory: function(oldName, newName) {
             if (!newName || newName === oldName) return false;
             if (State.data.categories.includes(newName)) {
-                alert('该分类名称已存在');
+                UI.showAlertModal('该分类名称已存在');
                 return false;
             }
 
@@ -1231,7 +1232,18 @@
                     <button class="btn btn-primary" id="confirm-rename-category">确定</button>
                 </div>
             `;
-            
+
+            const alertModal = document.createElement('div');
+            alertModal.id = Config.SELECTORS.ALERT_MODAL.slice(1);
+            alertModal.className = Config.CLASSES.DYNAMIC_MODAL;
+            alertModal.innerHTML = `
+                <div class="modal-title" id="alert-modal-title">提示</div>
+                <div class="alert-message" style="margin: 20px 0; font-size: 14px; color: #333; text-align: center;"></div>
+                <div class="modal-actions" style="justify-content: center;">
+                    <button class="btn btn-primary" id="alert-modal-confirm">确定</button>
+                </div>
+            `;
+
             // --- 结束：创建所有“动态”模态框 ---
 
 
@@ -1249,6 +1261,7 @@
             document.body.appendChild(deleteItemModal);
             document.body.appendChild(deleteCategoryModal);
             document.body.appendChild(renameCategoryModal);
+            document.body.appendChild(alertModal); // 附加 alert modal
             // --- 结束：附加所有“动态”模态框 ---
 
             this.cache(); // 创建后立即缓存
@@ -1296,6 +1309,7 @@
             this.elements.deleteItemModal = document.querySelector(Config.SELECTORS.DELETE_ITEM_MODAL);
             this.elements.deleteCategoryModal = document.querySelector(Config.SELECTORS.DELETE_CATEGORY_MODAL);
             this.elements.renameCategoryModal = document.querySelector(Config.SELECTORS.RENAME_CATEGORY_MODAL);
+            this.elements.alertModal = document.querySelector(Config.SELECTORS.ALERT_MODAL); // 缓存 alert modal
             // --- 结束：缓存所有“动态”模态框及其内容 ---
         },
 
@@ -1618,6 +1632,22 @@
             }
         },
 
+        showAlertModal: function(message, title = '提示') {
+            let modal = DOM.elements.alertModal;
+            if (!modal) return;
+
+            modal.querySelector('#alert-modal-title').textContent = title;
+            modal.querySelector('.alert-message').innerHTML = message;
+            modal.style.display = 'block';
+
+            const confirmBtn = modal.querySelector('#alert-modal-confirm');
+            const close = () => {
+                modal.style.display = 'none';
+                confirmBtn.removeEventListener('click', close);
+            };
+            confirmBtn.addEventListener('click', close);
+        },
+
         // --- Sidebar State ---
         expandSidebar: function() {
             DOM.elements.assistant.classList.remove(Config.CLASSES.COLLAPSED);
@@ -1772,6 +1802,7 @@
                 Config.SELECTORS.CATEGORY_CONTEXT_MENU,
                 Config.SELECTORS.OVERLAY,
                 Config.SELECTORS.DETAIL_MODAL,
+                Config.SELECTORS.ALERT_MODAL, // 新增：通用提示框
             ];
 
             for (const id of excludedIds) {
@@ -2037,7 +2068,7 @@
         onSaveItemClick: function() {
             const data = UI.getEditModalData();
             if (!data.title || !data.content) {
-                alert('请填写标题和内容');
+                UI.showAlertModal('请填写标题和内容');
                 return;
             }
             Storage.saveItem(data);
@@ -2056,21 +2087,12 @@
                     DOM.update();
                     UI.hideCategoryModal();
                 } else {
-                    alert('分类已存在！');
+                    UI.showAlertModal('分类已存在！');
                 }
             }
         },
         onCancelCategoryClick: function() {
             UI.hideCategoryModal();
-        },
-        
-        // --- Overlay ---
-        onOverlayClick: function(e) {
-            if (e.target === DOM.elements.overlay) {
-                UI.hideEditModal();
-                UI.hideCategoryModal();
-                // 确认框有自己的 overlay 监听
-            }
         },
 
         // --- Category Container (Delegated) ---
@@ -2370,7 +2392,6 @@
             els.cancelEditBtn.addEventListener('click', Handlers.onCancelEditClick);
             els.saveCategoryBtn.addEventListener('click', Handlers.onSaveCategoryClick);
             els.cancelCategoryBtn.addEventListener('click', Handlers.onCancelCategoryClick);
-            els.overlay.addEventListener('click', Handlers.onOverlayClick);
             
             // --- Category Container (Event Delegation) ---
             els.categoryContainer.addEventListener('click', Handlers.onCategoryContainerClick);
