@@ -1666,6 +1666,10 @@
             State.ui.isExpanded = true;
         },
         collapseSidebar: function() {
+            // 在折叠侧边栏时关闭所有右键菜单
+            UI.hideItemContextMenu();
+            UI.hideCategoryContextMenu();
+            
             DOM.elements.assistant.classList.remove(Config.CLASSES.OPEN);
             DOM.elements.assistant.classList.add(Config.CLASSES.COLLAPSED);
             State.ui.isExpanded = false;
@@ -2128,7 +2132,6 @@
         onCategoryContainerContextMenu: function(e) {
             const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
             if (categoryBtn) {
-                e.preventDefault();
                 // 在打开新菜单前，关闭所有已打开的菜单
                 UI.hideItemContextMenu();
                 UI.hideCategoryContextMenu();
@@ -2259,7 +2262,6 @@
         onItemsContainerContextMenu: function(e) {
             const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
             if (itemEl) {
-                e.preventDefault();
                 UI.hideItemContextMenu();
                 UI.hideCategoryContextMenu();
                 const itemId = itemEl.dataset.id;
@@ -2366,8 +2368,21 @@
 
         // --- 右键菜单屏蔽 ---
         onAssistantContextMenu: function(e) {
+            // 总是阻止浏览器的默认右键行为
             e.preventDefault();
             e.stopPropagation();
+            
+            // 检查是否点击在条目或分类按钮上
+            const itemEl = e.target.closest(Config.SELECTORS.INFO_ITEM);
+            const categoryBtn = e.target.closest(Config.SELECTORS.CATEGORY_BTN);
+            
+            // 如果不是点击在条目或分类按钮上，则关闭所有右键菜单
+            if (!itemEl && !categoryBtn) {
+                // 在右键点击侧边栏空白区域时关闭所有右键菜单
+                UI.hideItemContextMenu();
+                UI.hideCategoryContextMenu();
+            }
+            // 如果点击在条目或分类按钮上，不关闭菜单，让相应的右键菜单处理函数处理
             return false;
         },
     };
@@ -2382,11 +2397,6 @@
     const Events = {
         init: function() {
             const els = DOM.elements; //
-            
-            // --- 禁用侧边栏右键菜单 ---  
-            els.assistant.addEventListener('contextmenu', function(e) {
-                e.preventDefault(); // 阻止默认右键菜单显示
-            });
             
             // --- Sidebar Controls ---
             els.toggleBtn.addEventListener('click', Handlers.onTogglePositionClick);
