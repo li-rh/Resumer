@@ -145,6 +145,17 @@
                 ${Config.SELECTORS.CATEGORY_BTN} {
                     cursor: pointer !important;
                 }
+                
+                /* 屏蔽整个侧边栏的右键菜单 */
+                ${Config.SELECTORS.ASSISTANT},
+                ${Config.SELECTORS.ASSISTANT} * {
+                    -webkit-touch-callout: none !important;
+                    -webkit-user-select: none !important;
+                    -khtml-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    user-select: none !important;
+                }
             `;
             document.head.appendChild(style);
         },
@@ -2352,6 +2363,13 @@
                 });
             }
         },
+
+        // --- 右键菜单屏蔽 ---
+        onAssistantContextMenu: function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        },
     };
 
 
@@ -2376,6 +2394,9 @@
             els.closeBtn.addEventListener('click', Handlers.onCloseBtnClick);
             els.title.addEventListener('click', Handlers.onTitleClick);
             els.assistant.addEventListener('click', Handlers.onAssistantClick);
+            
+            // --- 屏蔽侧边栏右键菜单 ---
+            els.assistant.addEventListener('contextmenu', Handlers.onAssistantContextMenu);
 
             // --- Sidebar Drag ---
             els.assistant.addEventListener('mousedown', Handlers.onSidebarMouseDown);
