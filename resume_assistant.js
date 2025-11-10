@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Resumer
 // @namespace    https://greasyfork.org/zh-CN/users/1375382-ryanli
-// @version      4.0.5
+// @version      4.0.6
 // @description  侧边栏形式的个人简历助手、信息管理助手，支持自动填充、分类、搜索、拖拽排序等功能
 // @author       Ryanli
 // @match        *://*/*
@@ -100,7 +100,7 @@
         },
         TIMERS: {
             SIDEBAR_DRAG_START_DELAY: 300,  // 侧边栏拖拽延迟
-            DETAIL_HOVER_DELAY: 1500,        // 详情悬停
+            DETAIL_HOVER_DELAY: 1000,        // 详情悬停
             AUTO_FILL_TIMEOUT: 3000,         // 自动填充
             TINYMCE_POLL_INTERVAL: 200,    // TinyMCE 轮询间隔
             TINYMCE_POLL_TIMEOUT: 2000,        // TinyMCE 轮询超时
@@ -316,6 +316,7 @@
             width: 80px;
             background: #e8e8e8;
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 10px 0;
             border-right: 1px solid #ddd;
         }
@@ -2049,17 +2050,13 @@
                 // (确认框由其各自的取消按钮处理)
             }
             // 快捷键 Alt+Shift+L
-            if (e.key.toLowerCase() === 'l' && e.altKey && e.shiftKey) {
+            if (e.key && e.key.toLowerCase() === 'l' && e.altKey && e.shiftKey) {
                 e.preventDefault();
                 State.ui.isExpanded ? UI.collapseSidebar() : UI.expandSidebar();
             }
             // Ctrl 键按下 (用于详情)
             if (State.hoverDetail.isMouseOver && State.hoverDetail.currentItem && (e.key === "Control" || e.key === "Ctrl")) {
-                if (State.hoverDetail.timer) clearTimeout(State.hoverDetail.timer);
-                State.hoverDetail.timer = setTimeout(() => {
-                    const fullItem = State.data.items.find(i => i.id === State.hoverDetail.currentItem.dataset.id);
-                    if (fullItem) UI.showDetailModal(fullItem);
-                }, Config.TIMERS.DETAIL_HOVER_DELAY);
+                Handlers.startDetailTimer(State.hoverDetail.currentItem);
             }
         },
         onDocumentKeyup: function(e) {
@@ -2069,6 +2066,13 @@
                 State.hoverDetail.timer = null;
                 UI.hideDetailModal();
             }
+        },
+        startDetailTimer: function(itemEl) {
+            if (State.hoverDetail.timer) clearTimeout(State.hoverDetail.timer);
+            State.hoverDetail.timer = setTimeout(() => {
+                const fullItem = State.data.items.find(i => i.id === itemEl.dataset.id);
+                if (fullItem) UI.showDetailModal(fullItem);
+            }, Config.TIMERS.DETAIL_HOVER_DELAY);
         },
 
         // --- Footer ---
@@ -2332,7 +2336,8 @@
                 State.hoverDetail.isMouseOver = true;
                 State.hoverDetail.currentItem = itemEl;
                 if (e.ctrlKey) {
-                    Handlers.onDocumentKeydown(e); // 触发 Ctrl 按下逻辑
+                    // 直接处理Ctrl+悬停逻辑，清除旧的timer并创建新的timer
+                    Handlers.startDetailTimer(itemEl);
                 }
             }
         },
