@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Resumer
 // @namespace    https://greasyfork.org/zh-CN/users/1375382-ryanli
-// @version      4.0.6
+// @version      4.1.0
 // @description  侧边栏形式的个人简历助手、信息管理助手，支持自动填充、分类、搜索、拖拽排序等功能
 // @author       Ryanli
 // @match        *://*/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
+// @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // @license      MIT
 // ==/UserScript==
 
@@ -96,6 +98,7 @@
             IS_FIXED: 'personalInfoAssistant_isFixed',
             SIDEBAR_POSITION: 'personalInfoAssistant_sidebarPosition',
             COLLAPSED_POSITION: 'personalInfoAssistant_collapsedPosition',
+            HIDE_COLLAPSED: 'personalInfoAssistant_hideCollapsed', // 新增：隐藏最小化侧边栏设置
             OLD_DATA: 'personalInfoAssistantData', // 兼容旧版
         },
         TIMERS: {
@@ -837,6 +840,7 @@
             isFixed: true,
             sidebarPosition: 'right', // 'left' or 'right'
             collapsedPosition: null,  // { top: number }
+            hideCollapsed: false,     // 是否隐藏最小化的侧边栏
             categories: ['工作', '学习', '生活'],
             items: [
                 {
@@ -901,6 +905,7 @@
                 GM_setValue(Config.STORAGE_KEYS.IS_FIXED, State.data.isFixed);
                 GM_setValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, State.data.sidebarPosition);
                 GM_setValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, State.data.collapsedPosition);
+                GM_setValue(Config.STORAGE_KEYS.HIDE_COLLAPSED, State.data.hideCollapsed);
                 console.log('个人信息助手存储结构已初始化');
             }
         },
@@ -927,12 +932,14 @@
             const isFixed = GM_getValue(Config.STORAGE_KEYS.IS_FIXED, null);
             const sidebarPosition = GM_getValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, null);
             const collapsedPosition = GM_getValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, null);
+            const hideCollapsed = GM_getValue(Config.STORAGE_KEYS.HIDE_COLLAPSED, null);
 
             if (categories) State.data.categories = categories;
             if (items) State.data.items = items;
             if (isFixed !== null) State.data.isFixed = isFixed;
             if (sidebarPosition) State.data.sidebarPosition = sidebarPosition;
             if (collapsedPosition) State.data.collapsedPosition = collapsedPosition;
+            if (hideCollapsed !== null) State.data.hideCollapsed = hideCollapsed;
         },
 
         save: function() {
@@ -947,12 +954,14 @@
                 order: item.order || 1
             }));
             State.data.items = formattedItems;
-
+            
+            // 保存所有状态数据
             GM_setValue(Config.STORAGE_KEYS.CATEGORIES, State.data.categories);
             GM_setValue(Config.STORAGE_KEYS.ITEMS, State.data.items);
             GM_setValue(Config.STORAGE_KEYS.IS_FIXED, State.data.isFixed);
             GM_setValue(Config.STORAGE_KEYS.SIDEBAR_POSITION, State.data.sidebarPosition);
             GM_setValue(Config.STORAGE_KEYS.COLLAPSED_POSITION, State.data.collapsedPosition);
+            GM_setValue(Config.STORAGE_KEYS.HIDE_COLLAPSED, State.data.hideCollapsed);
         },
 
         saveItem: function(itemData) {
@@ -1664,6 +1673,8 @@
         expandSidebar: function() {
             DOM.elements.assistant.classList.remove(Config.CLASSES.COLLAPSED);
             DOM.elements.assistant.classList.add(Config.CLASSES.OPEN);
+            // 展开时始终显示侧边栏
+            DOM.elements.assistant.style.display = 'block';
             State.ui.isExpanded = true;
         },
         collapseSidebar: function() {
@@ -1674,6 +1685,23 @@
             DOM.elements.assistant.classList.remove(Config.CLASSES.OPEN);
             DOM.elements.assistant.classList.add(Config.CLASSES.COLLAPSED);
             State.ui.isExpanded = false;
+            
+            // 根据设置决定是否隐藏最小化的侧边栏
+            UI.applyHideCollapsedState();
+        },
+        // 应用隐藏最小化侧边栏的状态
+        applyHideCollapsedState: function() {
+            const assistant = DOM.elements.assistant;
+            // 只有在折叠状态下才应用隐藏逻辑
+            if (assistant.classList.contains(Config.CLASSES.COLLAPSED)) {
+                assistant.style.display = State.data.hideCollapsed ? 'none' : 'block';
+            }
+        },
+        // 切换隐藏最小化侧边栏的设置
+        toggleHideCollapsed: function() {
+            State.data.hideCollapsed = !State.data.hideCollapsed;
+            Storage.save();
+            UI.applyHideCollapsedState();
         },
         toggleSidebarPosition: function() {
             const assistant = DOM.elements.assistant;
@@ -2468,6 +2496,57 @@
 
     /**
      * ----------------------------------------------------------------
+     * 模块: Menu
+     * 负责处理油猴菜单命令注册
+     * ----------------------------------------------------------------
+     */
+const Menu = {
+    _menuCommandId: null, // 用于存储菜单命令ID
+    
+    // 注册或更新油猴菜单命令
+    registerOrUpdateMenuCommand: function() {
+        try {
+            
+            // 如果已经注册过，先注销旧的
+            if (this._menuCommandId !== null) {
+                GM_unregisterMenuCommand(this._menuCommandId);
+                this._menuCommandId = null;
+            }
+
+            // 根据当前状态确定菜单项标题
+            const menuTitle = State.data.hideCollapsed ?
+                '显示最小化侧边栏' : '隐藏最小化侧边栏';
+            
+            // 注册新的菜单命令并保存其ID
+            this._menuCommandId = GM_registerMenuCommand(
+                menuTitle,
+                this.menuCommandHandler,
+                "h" 
+            );
+            
+            console.log('已注册/更新油猴菜单：', menuTitle);
+        } catch (error) {
+            console.error('注册/更新油猴菜单失败:', error);
+        }
+    },
+
+    // 菜单命令处理函数
+    menuCommandHandler: function() {
+        // 切换隐藏状态
+        UI.toggleHideCollapsed();
+        // 重新注册以更新菜单项文本
+        Menu.registerOrUpdateMenuCommand();
+        console.log(`最小化侧边栏已${State.data.hideCollapsed ? '隐藏' : '显示'}`);
+    },
+
+    // 初始化油猴菜单
+    init: function() {
+        this.registerOrUpdateMenuCommand();
+    }
+};
+
+    /**
+     * ----------------------------------------------------------------
      * 模块: App
      * 应用主控制器，负责初始化和协调所有模块
      * ----------------------------------------------------------------
@@ -2491,12 +2570,16 @@
             UI.applyFixedState(State.data.isFixed);
             UI.applySidebarPosition(State.data.sidebarPosition);
             UI.restoreCollapsedPosition(); // 恢复收起时的位置
+            UI.applyHideCollapsedState(); // 应用隐藏最小化侧边栏设置
 
             // 5. 绑定所有事件
             Events.init();
 
             // 6. 初始化第三方集成
             TinyMCEIntegrator.init();
+            
+            // 7. 注册油猴菜单
+            Menu.init();
 
             console.log("Resumer (Refactored) 启动完成。");
         }
